@@ -1,6 +1,6 @@
 # mcp-farmer
 
-A CLI tool for managing and analyzing MCP (Model Context Protocol) servers.
+A CLI tool for scaffolding and analyzing MCP (Model Context Protocol) servers.
 
 ## Installation
 
@@ -8,20 +8,15 @@ A CLI tool for managing and analyzing MCP (Model Context Protocol) servers.
 bun install
 ```
 
-## Usage
+## Commands
+
+### new
+
+Create a new MCP server project interactively.
 
 ```bash
-# Show available commands
-bun run cli.ts --help
-
-# Vet an MCP server
-bun run cli.ts vet http://localhost:3000/mcp
-
-# Output results as JSON
-bun run cli.ts vet http://localhost:3000/mcp --output json
+bun run cli.ts new
 ```
-
-## Commands
 
 ### vet
 
