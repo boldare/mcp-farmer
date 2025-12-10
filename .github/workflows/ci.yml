@@ -19,5 +19,8 @@ jobs:
       - name: Type check
         run: bun run type-check
 
+      - name: Lint
+        run: bun run lint
+
       - name: Test
         run: bun run test
