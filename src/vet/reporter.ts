@@ -9,10 +9,10 @@ const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 const DIM = "\x1b[2m";
 
-const green = Bun.color("green", "ansi");
-const purple = Bun.color("#7563e7", "ansi");
-const muted = Bun.color("#a9b8d8", "ansi");
-const coral = Bun.color("#f57474", "ansi");
+const green = "\x1b[32m";
+const purple = "\x1b[35m";
+const muted = "\x1b[90m";
+const coral = "\x1b[91m";
 
 const CHECK = `${green}✓${RESET}`;
 const CROSS = `${coral}✗${RESET}`;

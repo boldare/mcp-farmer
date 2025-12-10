@@ -16,6 +16,14 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
   - `health.ts` - Health endpoint checker (`/health` route)
   - `reporter.ts` - Terminal output formatting with ANSI colors. Prints tool details, findings, and summary
   - `tools.test.ts` - Unit tests for tool checkers
+- `src/new/` - New command: scaffolds a new MCP server project
+  - `command.ts` - New command logic: interactive prompts, project initialization, dependency installation
+  - `templates/` - Template files copied to new projects
+    - `server.ts` - MCP server definition template
+    - `stdio.ts` - Stdio transport entry point
+    - `http.ts` - HTTP transport entry point
+    - `tsconfig.json` - TypeScript config template
+    - `gitignore` - Git ignore file template
 
 ## Vet Command Flow
 
@@ -23,3 +31,11 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 2. Connects to MCP server via `connect()` and checks `/health` endpoint in parallel
 3. Lists tools from server and runs checkers via `runCheckers()`
 4. Outputs results (JSON if `--output json`, otherwise formatted text)
+
+## New Command Flow
+
+1. CLI dispatches to `newCommand()` with args
+2. Prompts user for server name, directory path, language, and package manager
+3. Creates project directory and initializes with selected package manager
+4. Copies template files with name substitutions
+5. Installs dependencies (@modelcontextprotocol/sdk, zod) and dev dependencies (typescript, @types/node)

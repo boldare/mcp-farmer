@@ -17,7 +17,7 @@ Run 'mcp-farmer <command> --help' for more information on a command.`);
 }
 
 async function main() {
-  const args = Bun.argv.slice(2);
+  const args = process.argv.slice(2);
   const command = args[0];
 
   if (!command || command === "--help" || command === "-h") {

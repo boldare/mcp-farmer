@@ -24,3 +24,9 @@ alwaysApply: true
 
 - Keep entry point thin, delegate to focused modules
 - Modularize by low coupling and high cohesion
+
+## Development Commands
+
+- `bun run type-check` - Run TypeScript type checking
+- `bun run lint` - Run ESLint
+- `bun run test` - Run tests

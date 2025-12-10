@@ -1,6 +1,8 @@
 import * as p from "@clack/prompts";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
+import { readFile, writeFile, access, mkdir } from "node:fs/promises";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "deno" | "bun";
 
@@ -46,23 +48,51 @@ Examples:
   mcp-farmer new`);
 }
 
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runCommand(
+  command: string[],
+  cwd: string,
+): Promise<{ exitCode: number; stderr: string }> {
+  return new Promise((resolve) => {
+    const [cmd, ...args] = command;
+    const proc = spawn(cmd!, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+
+    let stderr = "";
+    proc.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    proc.on("close", (code: number | null) => {
+      resolve({ exitCode: code ?? 1, stderr });
+    });
+  });
+}
+
 async function copyTemplate(
   templateName: string,
   targetPath: string,
   replacements: Record<string, string> = {},
 ) {
-  if (await Bun.file(targetPath).exists()) {
+  if (await fileExists(targetPath)) {
     return;
   }
 
   const sourcePath = join(templatesDir, templateName);
-  let content = await Bun.file(sourcePath).text();
+  let content = await readFile(sourcePath, "utf-8");
 
   for (const [key, value] of Object.entries(replacements)) {
     content = content.replaceAll(`{{${key}}}`, value);
   }
 
-  await Bun.write(targetPath, content);
+  await writeFile(targetPath, content);
 }
 
 export async function newCommand(args: string[]) {
@@ -122,8 +152,8 @@ export async function newCommand(args: string[]) {
   const packageManager = project.packageManager as PackageManager;
   const targetDir = join(process.cwd(), path);
 
-  const dirExists = await Bun.file(join(targetDir, "package.json")).exists();
-  if (dirExists) {
+  const projectExists = await fileExists(join(targetDir, "package.json"));
+  if (projectExists) {
     p.cancel(
       `Directory ${path} already contains a project (package.json exists).`,
     );
@@ -132,22 +162,15 @@ export async function newCommand(args: string[]) {
 
   const s = p.spinner();
 
-  await Bun.write(join(targetDir, ".gitkeep"), "");
+  await mkdir(targetDir, { recursive: true });
 
   s.start("Initializing project");
 
   try {
     const initCmd = initCommands[packageManager];
-    const proc = Bun.spawn(initCmd, {
-      cwd: targetDir,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    const exitCode = await proc.exited;
+    const { exitCode, stderr } = await runCommand(initCmd, targetDir);
 
     if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text();
       throw new Error(`Init failed with exit code ${exitCode}: ${stderr}`);
     }
 
@@ -182,16 +205,9 @@ export async function newCommand(args: string[]) {
 
   try {
     const addCmd = [...addCommands[packageManager], ...dependencies];
-    const proc = Bun.spawn(addCmd, {
-      cwd: targetDir,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    const exitCode = await proc.exited;
+    const { exitCode, stderr } = await runCommand(addCmd, targetDir);
 
     if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text();
       throw new Error(`Add failed with exit code ${exitCode}: ${stderr}`);
     }
 
@@ -206,16 +222,9 @@ export async function newCommand(args: string[]) {
 
   try {
     const addDevCmd = [...addDevCommands[packageManager], ...devDependencies];
-    const proc = Bun.spawn(addDevCmd, {
-      cwd: targetDir,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    const exitCode = await proc.exited;
+    const { exitCode, stderr } = await runCommand(addDevCmd, targetDir);
 
     if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text();
       throw new Error(
         `Add dev dependencies failed with exit code ${exitCode}: ${stderr}`,
       );
