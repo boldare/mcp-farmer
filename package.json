@@ -17,6 +17,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@clack/prompts": "^0.11.0",
     "@modelcontextprotocol/sdk": "^1.24.3"
   }
 }

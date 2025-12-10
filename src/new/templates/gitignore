@@ -1,0 +1,21 @@
+# dependencies
+node_modules
+
+# output
+dist
+*.tgz
+
+# logs
+*.log
+
+# dotenv environment variable files
+.env
+.env.local
+.env.*.local
+
+# caches
+*.tsbuildinfo
+
+# OS
+.DS_Store
+

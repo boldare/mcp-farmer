@@ -1,0 +1,232 @@
+import * as p from "@clack/prompts";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+type PackageManager = "npm" | "pnpm" | "yarn" | "deno" | "bun";
+
+const initCommands: Record<PackageManager, string[]> = {
+  npm: ["npm", "init", "-y"],
+  pnpm: ["pnpm", "init"],
+  yarn: ["yarn", "init", "-y"],
+  deno: ["deno", "init"],
+  bun: ["bun", "init", "-y"],
+};
+
+const addCommands: Record<PackageManager, string[]> = {
+  npm: ["npm", "install"],
+  pnpm: ["pnpm", "add"],
+  yarn: ["yarn", "add"],
+  deno: ["deno", "add"],
+  bun: ["bun", "add"],
+};
+
+const dependencies = ["@modelcontextprotocol/sdk", "zod"];
+const devDependencies = ["typescript", "@types/node"];
+
+const addDevCommands: Record<PackageManager, string[]> = {
+  npm: ["npm", "install", "-D"],
+  pnpm: ["pnpm", "add", "-D"],
+  yarn: ["yarn", "add", "-D"],
+  deno: ["deno", "add", "--dev"],
+  bun: ["bun", "add", "-d"],
+};
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const templatesDir = join(__dirname, "templates");
+
+function printHelp() {
+  console.log(`Usage: mcp-farmer new [options]
+
+Create a new MCP server project.
+
+Options:
+  --help       Show this help message
+
+Examples:
+  mcp-farmer new`);
+}
+
+async function copyTemplate(
+  templateName: string,
+  targetPath: string,
+  replacements: Record<string, string> = {},
+) {
+  if (await Bun.file(targetPath).exists()) {
+    return;
+  }
+
+  const sourcePath = join(templatesDir, templateName);
+  let content = await Bun.file(sourcePath).text();
+
+  for (const [key, value] of Object.entries(replacements)) {
+    content = content.replaceAll(`{{${key}}}`, value);
+  }
+
+  await Bun.write(targetPath, content);
+}
+
+export async function newCommand(args: string[]) {
+  if (args.includes("--help") || args.includes("-h")) {
+    printHelp();
+    process.exit(0);
+  }
+
+  p.intro("Create a new MCP server");
+
+  const project = await p.group(
+    {
+      name: () =>
+        p.text({
+          message: "Server name:",
+          placeholder: "my-mcp-server",
+          validate(value) {
+            if (!value) return "Name is required";
+          },
+        }),
+      path: ({ results }) =>
+        p.text({
+          message: "Directory path:",
+          placeholder: `./${results.name}`,
+          initialValue: `./${results.name}`,
+          validate(value) {
+            if (!value) return "Path is required";
+          },
+        }),
+      language: () =>
+        p.select({
+          message: "Language:",
+          options: [{ value: "typescript", label: "TypeScript" }],
+        }),
+      packageManager: () =>
+        p.select({
+          message: "Package manager:",
+          options: [
+            { value: "npm", label: "npm" },
+            { value: "pnpm", label: "pnpm" },
+            { value: "yarn", label: "yarn" },
+            { value: "deno", label: "deno" },
+            { value: "bun", label: "bun" },
+          ],
+        }),
+    },
+    {
+      onCancel: () => {
+        p.cancel("Operation cancelled.");
+        process.exit(0);
+      },
+    },
+  );
+
+  const name = project.name as string;
+  const path = project.path as string;
+  const packageManager = project.packageManager as PackageManager;
+  const targetDir = join(process.cwd(), path);
+
+  const dirExists = await Bun.file(join(targetDir, "package.json")).exists();
+  if (dirExists) {
+    p.cancel(
+      `Directory ${path} already contains a project (package.json exists).`,
+    );
+    process.exit(1);
+  }
+
+  const s = p.spinner();
+
+  await Bun.write(join(targetDir, ".gitkeep"), "");
+
+  s.start("Initializing project");
+
+  try {
+    const initCmd = initCommands[packageManager];
+    const proc = Bun.spawn(initCmd, {
+      cwd: targetDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      throw new Error(`Init failed with exit code ${exitCode}: ${stderr}`);
+    }
+
+    s.stop("Project initialized");
+  } catch (error) {
+    s.stop("Failed to initialize project");
+    console.error(error);
+    process.exit(1);
+  }
+
+  s.start("Creating project files");
+
+  try {
+    const replacements = { name };
+
+    await Promise.all([
+      copyTemplate("server.ts", join(targetDir, "server.ts"), replacements),
+      copyTemplate("stdio.ts", join(targetDir, "stdio.ts")),
+      copyTemplate("http.ts", join(targetDir, "http.ts")),
+      copyTemplate("tsconfig.json", join(targetDir, "tsconfig.json")),
+      copyTemplate("gitignore", join(targetDir, ".gitignore")),
+    ]);
+
+    s.stop("Project files created");
+  } catch (error) {
+    s.stop("Failed to create project files");
+    console.error(error);
+    process.exit(1);
+  }
+
+  s.start("Adding dependencies");
+
+  try {
+    const addCmd = [...addCommands[packageManager], ...dependencies];
+    const proc = Bun.spawn(addCmd, {
+      cwd: targetDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      throw new Error(`Add failed with exit code ${exitCode}: ${stderr}`);
+    }
+
+    s.stop("Dependencies added");
+  } catch (error) {
+    s.stop("Failed to add dependencies");
+    console.error(error);
+    process.exit(1);
+  }
+
+  s.start("Adding dev dependencies");
+
+  try {
+    const addDevCmd = [...addDevCommands[packageManager], ...devDependencies];
+    const proc = Bun.spawn(addDevCmd, {
+      cwd: targetDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      throw new Error(
+        `Add dev dependencies failed with exit code ${exitCode}: ${stderr}`,
+      );
+    }
+
+    s.stop("Dev dependencies added");
+  } catch (error) {
+    s.stop("Failed to add dev dependencies");
+    console.error(error);
+    process.exit(1);
+  }
+
+  p.outro(`Your MCP server is ready!\n\n  cd ${path}`);
+}
