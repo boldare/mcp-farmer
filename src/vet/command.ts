@@ -2,8 +2,8 @@ import { parseArgs } from "util";
 
 import { runCheckers } from "./tools.js";
 import { checkHealth } from "./health.js";
-import { printHealth, printResults } from "./reporter.js";
-import { connect } from "./mcp.js";
+import { printHealth, printResults, printAuthError } from "./reporter.js";
+import { connect, AuthenticationRequiredError } from "./mcp.js";
 
 function printHelp() {
   console.log(`Usage: mcp-farmer vet <url> [options]
@@ -65,10 +65,38 @@ export async function vetCommand(args: string[]) {
     process.exit(2);
   }
 
-  const [{ client, transport }, health] = await Promise.all([
+  const [connectionResult, healthResult] = await Promise.allSettled([
     connect(parsedUrl),
     checkHealth(parsedUrl),
   ]);
+
+  if (connectionResult.status === "rejected") {
+    const error = connectionResult.reason;
+    if (error instanceof AuthenticationRequiredError) {
+      if (outputJson) {
+        console.log(
+          JSON.stringify(
+            {
+              error: "authentication_required",
+              message: error.message,
+              authHeader: error.authHeader,
+            },
+            null,
+            2,
+          ),
+        );
+        process.exit(1);
+      }
+
+      printAuthError(error);
+      process.exit(1);
+    }
+    throw error;
+  }
+
+  const { client, transport } = connectionResult.value;
+  const health =
+    healthResult.status === "fulfilled" ? healthResult.value : null;
 
   try {
     const serverVersion = client.getServerVersion();
@@ -99,7 +127,9 @@ export async function vetCommand(args: string[]) {
     }
 
     console.log(`Tools response time: ${toolsResponseTimeMs.toFixed(2)}ms`);
-    printHealth(health);
+    if (health) {
+      printHealth(health);
+    }
     printResults(tools, findings);
   } finally {
     await transport.close();

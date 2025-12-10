@@ -2,6 +2,7 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 import type { Finding, Schema, SchemaProperty } from "./tools.js";
 import type { HealthCheckResult } from "./health.js";
+import type { AuthenticationRequiredError } from "./mcp.js";
 
 // Styling constants
 const RESET = "\x1b[0m";
@@ -197,4 +198,18 @@ export function printResults(tools: Tool[], findings: Finding[]) {
     }
     printSummary(tools, findings);
   }
+}
+
+export function printAuthError(error: AuthenticationRequiredError) {
+  console.log(`${BOLD}Authentication Required${RESET}\n`);
+  console.log(`  ${CROSS} ${error.message}`);
+
+  if (error.authHeader) {
+    console.log(`\n  ${DIM}WWW-Authenticate: ${error.authHeader}${RESET}`);
+  }
+
+  console.log(`\n${DIM}This MCP server requires authentication.${RESET}`);
+  console.log(
+    `${DIM}Provide credentials via the server's authentication flow.${RESET}`,
+  );
 }
