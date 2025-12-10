@@ -1,0 +1,25 @@
+---
+alwaysApply: true
+---
+
+## Project Overview
+
+mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol) servers.
+
+## File Structure
+
+- `cli.ts` - Entry point. Parses CLI args and dispatches to subcommands
+- `src/vet/` - Vet command: connects to MCP servers and runs quality checks on exposed tools
+  - `command.ts` - Vet command logic: parses args, orchestrates MCP connection, runs checks, outputs results
+  - `mcp.ts` - MCP client connection logic. Tries StreamableHTTP transport first, falls back to SSE
+  - `tools.ts` - Tool analysis checkers: validates descriptions, input counts, and detects duplicate tool names
+  - `health.ts` - Health endpoint checker (`/health` route)
+  - `reporter.ts` - Terminal output formatting with ANSI colors. Prints tool details, findings, and summary
+  - `tools.test.ts` - Unit tests for tool checkers
+
+## Vet Command Flow
+
+1. CLI dispatches to `vetCommand()` with args
+2. Connects to MCP server via `connect()` and checks `/health` endpoint in parallel
+3. Lists tools from server and runs checkers via `runCheckers()`
+4. Outputs results (JSON if `--output json`, otherwise formatted text)
