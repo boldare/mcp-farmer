@@ -167,6 +167,7 @@ function formatFindings(findings: Finding[]): string {
 
   const errors = findings.filter((f) => f.severity === "error");
   const warnings = findings.filter((f) => f.severity === "warning");
+  const infos = findings.filter((f) => f.severity === "info");
 
   if (errors.length > 0) {
     lines.push(`${BOLD}Errors (${errors.length})${RESET}`);
@@ -190,6 +191,19 @@ function formatFindings(findings: Finding[]): string {
           : finding.toolName
         : "server";
       lines.push(`  ${WARN} ${finding.message} ${DIM}(${location})${RESET}`);
+    }
+    lines.push("");
+  }
+
+  if (infos.length > 0) {
+    lines.push(`${BOLD}Info (${infos.length})${RESET}`);
+    for (const finding of infos) {
+      const location = finding.toolName
+        ? finding.inputName
+          ? `${finding.toolName}.${finding.inputName}`
+          : finding.toolName
+        : "server";
+      lines.push(`  ${DIM}ℹ ${finding.message} (${location})${RESET}`);
     }
   }
 

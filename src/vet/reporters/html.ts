@@ -79,7 +79,18 @@ function renderTool(tool: Tool, findings: Finding[]): string {
 
   const issuesHtml =
     hasIssues && toolFindings.length > 0
-      ? `<ul class="issues">${toolFindings.map((f) => `<li>⚠ ${escapeHtml(f.message)}${f.inputName ? `: <code>${escapeHtml(f.inputName)}</code>` : ""}</li>`).join("")}</ul>`
+      ? `<ul class="issues">${toolFindings
+          .map((f) => {
+            const icon =
+              f.severity === "error"
+                ? "✗"
+                : f.severity === "warning"
+                  ? "⚠"
+                  : "ℹ";
+            const cls = f.severity === "info" ? ' class="info"' : "";
+            return `<li${cls}>${icon} ${escapeHtml(f.message)}${f.inputName ? `: <code>${escapeHtml(f.inputName)}</code>` : ""}</li>`;
+          })
+          .join("")}</ul>`
       : "";
 
   return `
@@ -212,6 +223,7 @@ h2 {
 .inputs .missing-desc .desc { color: var(--fg3); }
 .issues { list-style: none; margin-top: 0.625rem; font-size: 0.75rem; color: var(--warn); }
 .issues li { margin-bottom: 0.125rem; }
+.issues li.info { color: var(--fg3); }
 .issues code { font-size: 0.7rem; }
 .empty { color: var(--fg3); font-size: 0.8rem; }
 .section-label { font-size: 0.7rem; font-weight: 600; color: var(--fg3); margin: 0.75rem 0 0.375rem; }

@@ -1,7 +1,7 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 export interface Finding {
-  severity: "error" | "warning";
+  severity: "error" | "warning" | "info";
   message: string;
   toolName?: string;
   inputName?: string;
@@ -197,6 +197,20 @@ export function checkInputCount(tool: Tool): Finding | null {
   return null;
 }
 
+export function checkOutputSchema(
+  tool: Tool & { outputSchema?: Schema },
+): Finding | null {
+  if (!tool.outputSchema) {
+    return {
+      severity: "info",
+      message: "Missing output schema",
+      toolName: tool.name,
+    };
+  }
+
+  return null;
+}
+
 export function checkDuplicateToolNames(tools: Tool[]): Finding[] {
   const seen = new Map<string, number>();
 
@@ -271,6 +285,7 @@ export function runCheckers(tools: Tool[]): Finding[] {
       ...checkInputDescriptions(tool),
       checkInputCount(tool),
       checkDangerousTools(tool),
+      checkOutputSchema(tool as Tool & { outputSchema?: Schema }),
     ])
     .filter((f): f is Finding => f !== null);
 

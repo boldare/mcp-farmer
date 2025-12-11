@@ -37,6 +37,7 @@ Rules:
 
 - Missing tool description
 - Missing input description
+- Missing output schema
 - Too many required inputs (more than 5)
 - Too many tools exposed (more than 30)
 - Duplicate tool names

@@ -9,7 +9,9 @@ import {
   checkTotalToolCount,
   checkDangerousTools,
   checkSimilarDescriptions,
+  checkOutputSchema,
   tokenize,
+  type Schema,
 } from "./tools.js";
 
 describe("checkToolDescriptions", () => {
@@ -402,5 +404,37 @@ describe("checkSimilarDescriptions", () => {
     } else {
       expect(findings).toEqual([]);
     }
+  });
+});
+
+describe("checkOutputSchema", () => {
+  test("returns info when tool has no output schema", () => {
+    const tool = { name: "my-tool", description: "Test" } as Tool;
+
+    const finding = checkOutputSchema(tool);
+
+    expect(finding).toEqual({
+      severity: "info",
+      message: "Missing output schema",
+      toolName: "my-tool",
+    });
+  });
+
+  test("returns no finding when tool has output schema", () => {
+    const tool = {
+      name: "my-tool",
+      description: "Test",
+      inputSchema: { type: "object" },
+      outputSchema: {
+        type: "object",
+        properties: {
+          result: { type: "string" },
+        },
+      },
+    } as Tool & { outputSchema: Schema };
+
+    const finding = checkOutputSchema(tool);
+
+    expect(finding).toBeNull();
   });
 });
