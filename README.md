@@ -28,5 +28,17 @@ bun run cli.ts vet <url> [options]
 
 Options:
 
-- `--output json` - Output results as JSON to stdout
+- `--output json|html` - Output format (json or html)
+- `--oauth` - Enable OAuth authentication flow
+- `--oauth-port <port>` - Port for OAuth callback server (default: 9876)
 - `--help` - Show help message
+
+Rules:
+
+- Missing tool description
+- Missing input description
+- Too many required inputs (more than 5)
+- Too many tools exposed (more than 30)
+- Duplicate tool names
+- Similar tool descriptions
+- Potentially dangerous tool names (e.g., exec, eval, rm, drop)
