@@ -105,6 +105,30 @@ function formatTool(tool: Tool, findings: Finding[]): string {
     });
   }
 
+  // Output section
+  const outputSchema = (tool as Tool & { outputSchema?: Schema }).outputSchema;
+  if (outputSchema) {
+    const outputProps = outputSchema.properties ?? {};
+    const outputPropNames = Object.keys(outputProps);
+
+    lines.push(""); // spacing
+    if (outputPropNames.length === 0) {
+      lines.push(`    Output: ${DIM}none${RESET}`);
+    } else {
+      lines.push(`    Output ${DIM}(${outputPropNames.length} fields)${RESET}`);
+      outputPropNames.forEach((name) => {
+        const prop = outputProps[name];
+        if (!prop) return;
+        const type = formatType(prop);
+        lines.push(`        ${BOLD}${name}${RESET} ${DIM}(${type})${RESET}`);
+        if (prop.description) {
+          const desc = truncate(prop.description, 65);
+          lines.push(`          ${DIM}${desc}${RESET}`);
+        }
+      });
+    }
+  }
+
   // Quality summary line from findings
   const inputFindingsCount = toolFindings.filter((f) => f.inputName).length;
   const issues: string[] = [];

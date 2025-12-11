@@ -45,7 +45,36 @@ function renderTool(tool: Tool, findings: Finding[]): string {
       })
       .join("");
 
-    inputsHtml = `<table class="inputs"><tbody>${rows}</tbody></table>`;
+    inputsHtml = `<h4 class="section-label">Inputs</h4><table class="inputs"><tbody>${rows}</tbody></table>`;
+  }
+
+  // Render output schema if present
+  const outputSchema = (tool as Tool & { outputSchema?: Schema }).outputSchema;
+  let outputsHtml = "";
+  if (outputSchema) {
+    const outputProps = outputSchema.properties ?? {};
+    const outputPropNames = Object.keys(outputProps);
+
+    if (outputPropNames.length === 0) {
+      outputsHtml = `<h4 class="section-label">Output</h4><p class="empty">No output fields</p>`;
+    } else {
+      const rows = outputPropNames
+        .map((name) => {
+          const prop = outputProps[name];
+          if (!prop) return "";
+          const type = formatType(prop);
+          const desc = prop.description;
+
+          return `<tr>
+            <td class="name"><code>${escapeHtml(name)}</code></td>
+            <td class="type">${escapeHtml(type)}</td>
+            <td class="desc">${desc ? escapeHtml(desc) : "—"}</td>
+          </tr>`;
+        })
+        .join("");
+
+      outputsHtml = `<h4 class="section-label">Output</h4><table class="inputs"><tbody>${rows}</tbody></table>`;
+    }
   }
 
   const issuesHtml =
@@ -58,6 +87,7 @@ function renderTool(tool: Tool, findings: Finding[]): string {
       <h3><code>${escapeHtml(tool.name)}</code></h3>
       <p class="tool-desc">${tool.description ? escapeHtml(tool.description) : "<em>No description</em>"}</p>
       ${inputsHtml}
+      ${outputsHtml}
       ${issuesHtml}
     </section>`;
 }
@@ -173,10 +203,10 @@ h2 {
 .inputs { width: 100%; border-collapse: collapse; font-size: 0.8rem; table-layout: fixed; }
 .inputs td { padding: 0.35rem 0; vertical-align: baseline; border-bottom: 1px solid var(--border); }
 .inputs tr:last-child td { border-bottom: none; }
-.inputs .name { width: 28%; }
+.inputs .name { width: 28%; word-break: break-all; overflow-wrap: anywhere; }
 .inputs .type { width: 18%; }
 .inputs .desc { width: 54%; color: var(--fg2); white-space: pre-wrap; }
-.inputs code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.75rem; }
+.inputs code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.75rem; word-break: break-all; }
 .inputs sup { color: var(--accent); font-weight: 600; margin-left: 2px; }
 .inputs .type { color: var(--fg3); font-size: 0.7rem; }
 .inputs .missing-desc .desc { color: var(--fg3); }
@@ -184,6 +214,7 @@ h2 {
 .issues li { margin-bottom: 0.125rem; }
 .issues code { font-size: 0.7rem; }
 .empty { color: var(--fg3); font-size: 0.8rem; }
+.section-label { font-size: 0.7rem; font-weight: 600; color: var(--fg3); margin: 0.75rem 0 0.375rem; }
 footer {
   margin-top: 2.5rem;
   padding-top: 0.75rem;
