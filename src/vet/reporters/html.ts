@@ -167,6 +167,7 @@ h2 {
   font-size: 0.85rem;
   line-height: 1.55;
   margin-bottom: 0.875rem;
+  white-space: pre-wrap;
 }
 .tool-desc em { color: var(--fg3); }
 .inputs { width: 100%; border-collapse: collapse; font-size: 0.8rem; table-layout: fixed; }
@@ -174,11 +175,10 @@ h2 {
 .inputs tr:last-child td { border-bottom: none; }
 .inputs .name { width: 28%; }
 .inputs .type { width: 18%; }
-.inputs .desc { width: 54%; }
+.inputs .desc { width: 54%; color: var(--fg2); white-space: pre-wrap; }
 .inputs code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.75rem; }
 .inputs sup { color: var(--accent); font-weight: 600; margin-left: 2px; }
 .inputs .type { color: var(--fg3); font-size: 0.7rem; }
-.inputs .desc { color: var(--fg2); }
 .inputs .missing-desc .desc { color: var(--fg3); }
 .issues { list-style: none; margin-top: 0.625rem; font-size: 0.75rem; color: var(--warn); }
 .issues li { margin-bottom: 0.125rem; }
