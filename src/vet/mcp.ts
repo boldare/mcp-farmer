@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 
 import type { CliOAuthProvider } from "./oauth.js";
@@ -126,4 +127,14 @@ export async function connect(
     }
     throw error;
   }
+}
+
+export async function connectStdio(
+  command: string,
+  args: string[],
+): Promise<{ client: Client; transport: Transport }> {
+  const client = new Client({ name: "mcp-farmer", version: "1.0.0" });
+  const transport = new StdioClientTransport({ command, args });
+  await client.connect(transport);
+  return { client, transport };
 }

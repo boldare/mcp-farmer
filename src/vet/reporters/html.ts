@@ -132,7 +132,7 @@ function renderSummary(
       <div><dt>Tools</dt><dd>${tools.length}</dd></div>
       <div><dt>Inputs</dt><dd>${totalInputs}</dd></div>
       <div><dt>Response</dt><dd>${responseMs.toFixed(0)}ms</dd></div>
-      <div><dt>/health</dt><dd class="${health ? (health.available ? "ok" : "err") : ""}">${health ? (health.available ? `${health.status} OK` : "unavailable") : "not checked"}</dd></div>
+      ${health ? `<div><dt>/health</dt><dd class="${health.available ? "ok" : "err"}">${health.available ? `${health.status} OK` : "unavailable"}</dd></div>` : ""}
       ${issues.length > 0 ? `<div class="issues"><dt>Issues</dt><dd>${issues.join(", ")}</dd></div>` : ""}
     </dl>`;
 }
@@ -247,7 +247,7 @@ export const htmlReporter: Reporter = (data: ReportData): string => {
   const {
     serverName,
     serverVersion,
-    url,
+    target,
     tools,
     findings,
     health,
@@ -255,7 +255,7 @@ export const htmlReporter: Reporter = (data: ReportData): string => {
   } = data;
 
   const title =
-    serverName && serverVersion ? `${serverName} v${serverVersion}` : url;
+    serverName && serverVersion ? `${serverName} v${serverVersion}` : target;
 
   const toolsHtml =
     tools.length > 0
@@ -273,7 +273,7 @@ export const htmlReporter: Reporter = (data: ReportData): string => {
 <body>
   <header>
     <h1>${escapeHtml(title)}</h1>
-    <p class="meta">${escapeHtml(url)}</p>
+    <p class="meta">${escapeHtml(target)}</p>
   </header>
 
   ${renderSummary(tools, findings, health, toolsResponseTimeMs)}

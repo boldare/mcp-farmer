@@ -6,7 +6,7 @@ import type { HealthCheckResult } from "../health.js";
 export interface ReportData {
   serverName?: string;
   serverVersion?: string;
-  url: string;
+  target: string;
   tools: Tool[];
   findings: Finding[];
   health: HealthCheckResult | null;
