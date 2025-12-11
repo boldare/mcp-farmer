@@ -1,10 +1,13 @@
 import { defineConfig } from "eslint/config";
-import eslint from "@eslint/js";
+import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default defineConfig([
-  eslint.configs.recommended,
-  tseslint.configs.recommended,
+  { files: ["src/**/*.ts"], plugins: { js }, extends: ["js/recommended"] },
+  tseslint.configs.strict,
+  tseslint.configs.stylistic,
+  eslintConfigPrettier,
   {
     ignores: ["node_modules/", "src/new/templates/"],
   },

@@ -10,7 +10,7 @@ export interface Finding {
 export interface SchemaProperty {
   type?: string | string[];
   description?: string;
-  anyOf?: Array<{ type: string; items?: { type: string } }>;
+  anyOf?: { type: string; items?: { type: string } }[];
   items?: { type: string };
   additionalProperties?: { type: string };
 }

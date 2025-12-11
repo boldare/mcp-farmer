@@ -105,7 +105,10 @@ function printTool(tool: Tool, findings: Finding[]) {
     console.log(`    Inputs ${DIM}(${inputSummary})${RESET}`);
 
     propNames.forEach((name) => {
-      const prop = properties[name]!;
+      const prop = properties[name];
+      if (!prop) {
+        return;
+      }
       const isRequired = required.has(name);
       const reqLabel = isRequired ? `${purple}*${RESET}` : " ";
 
@@ -209,5 +212,7 @@ export function printAuthError(error: AuthenticationRequiredError) {
   }
 
   console.log(`\n${DIM}This MCP server requires authentication.${RESET}`);
-  console.log(`${DIM}Use --oauth flag to enable OAuth authentication flow.${RESET}`);
+  console.log(
+    `${DIM}Use --oauth flag to enable OAuth authentication flow.${RESET}`,
+  );
 }

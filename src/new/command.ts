@@ -61,9 +61,13 @@ function runCommand(
   command: string[],
   cwd: string,
 ): Promise<{ exitCode: number; stderr: string }> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const [cmd, ...args] = command;
-    const proc = spawn(cmd!, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    if (!cmd) {
+      reject(new Error("Command is required"));
+      return;
+    }
+    const proc = spawn(cmd, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
 
     let stderr = "";
     proc.stderr.on("data", (data: Buffer) => {
