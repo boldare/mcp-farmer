@@ -12,9 +12,14 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 - `src/vet/` - Vet command: connects to MCP servers and runs quality checks on exposed tools
   - `command.ts` - Vet command logic: parses args, orchestrates MCP connection, runs checks, outputs results
   - `mcp.ts` - MCP client connection logic. Tries StreamableHTTP transport first, falls back to SSE
-  - `tools.ts` - Tool analysis checkers: validates descriptions, input counts, and detects duplicate tool names
+  - `tools.ts` - Tool analysis checkers: validates descriptions, input/output schemas, input counts, and detects duplicate tool names
   - `health.ts` - Health endpoint checker (`/health` route)
-  - `reporter.ts` - Terminal output formatting with ANSI colors. Prints tool details, findings, and summary
+  - `oauth.ts` - OAuth authentication provider for MCP servers requiring auth
+  - `reporters/` - Output formatters for vet results
+    - `console.ts` - Terminal output formatting with ANSI colors. Prints tool details, findings, and summary
+    - `html.ts` - HTML report generator with styled output
+    - `json.ts` - JSON output formatter
+    - `shared.ts` - Shared types and utilities for reporters
   - `tools.test.ts` - Unit tests for tool checkers
 - `src/new/` - New command: scaffolds a new MCP server project
   - `command.ts` - New command logic: interactive prompts, project initialization, dependency installation
@@ -30,7 +35,7 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 1. CLI dispatches to `vetCommand()` with args
 2. Connects to MCP server via `connect()` and checks `/health` endpoint in parallel
 3. Lists tools from server and runs checkers via `runCheckers()`
-4. Outputs results (JSON if `--output json`, otherwise formatted text)
+4. Outputs results (JSON if `--output json`, HTML if `--output html`, otherwise formatted text)
 
 ## New Command Flow
 
