@@ -25,12 +25,14 @@ async function main() {
     process.exit(0);
   }
 
+  const subcommandArgs = args.slice(1);
+
   switch (command) {
     case "vet":
-      await vetCommand(args.slice(1));
+      await vetCommand(subcommandArgs);
       break;
     case "new":
-      await newCommand(args.slice(1));
+      await newCommand(subcommandArgs);
       break;
     default:
       console.error(`Unknown command: ${command}\n`);

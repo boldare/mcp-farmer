@@ -42,6 +42,7 @@ export async function vetCommand(args: string[]) {
     args,
     options: {
       output: {
+        short: "o",
         type: "string",
       },
       oauth: {
@@ -51,6 +52,7 @@ export async function vetCommand(args: string[]) {
         type: "string",
       },
       help: {
+        short: "h",
         type: "boolean",
       },
     },

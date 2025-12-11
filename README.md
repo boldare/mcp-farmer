@@ -28,10 +28,10 @@ bun run cli.ts vet <url> [options]
 
 Options:
 
-- `--output json|html` - Output format (json or html)
+- `-o, --output json|html` - Output format (json or html)
 - `--oauth` - Enable OAuth authentication flow
 - `--oauth-port <port>` - Port for OAuth callback server (default: 9876)
-- `--help` - Show help message
+- `-h, --help` - Show help message
 
 Rules:
 
