@@ -14,13 +14,17 @@
     "type-check": "tsc --noEmit",
     "test": "bun test",
     "lint": "eslint .",
-    "format": "prettier . --write"
+    "format": "prettier . --write",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.2.0",
+    "@commitlint/config-conventional": "^20.2.0",
     "@eslint/js": "^9.39.1",
     "@types/bun": "latest",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
     "prettier": "3.7.4",
     "typescript-eslint": "^8.49.0"
   },
