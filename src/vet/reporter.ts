@@ -209,7 +209,5 @@ export function printAuthError(error: AuthenticationRequiredError) {
   }
 
   console.log(`\n${DIM}This MCP server requires authentication.${RESET}`);
-  console.log(
-    `${DIM}Provide credentials via the server's authentication flow.${RESET}`,
-  );
+  console.log(`${DIM}Use --oauth flag to enable OAuth authentication flow.${RESET}`);
 }

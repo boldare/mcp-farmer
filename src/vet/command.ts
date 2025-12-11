@@ -4,6 +4,7 @@ import { runCheckers } from "./tools.js";
 import { checkHealth } from "./health.js";
 import { printHealth, printResults, printAuthError } from "./reporter.js";
 import { connect, AuthenticationRequiredError } from "./mcp.js";
+import { CliOAuthProvider } from "./oauth.js";
 
 function printHelp() {
   console.log(`Usage: mcp-farmer vet <url> [options]
@@ -11,15 +12,18 @@ function printHelp() {
 Vet an MCP server by connecting and running checks.
 
 Arguments:
-  url              The URL of the MCP server to connect to
+  url                  The URL of the MCP server to connect to
 
 Options:
-  --output json    Output results as JSON to stdout
-  --help           Show this help message
+  --output json        Output results as JSON to stdout
+  --oauth              Enable OAuth authentication flow
+  --oauth-port <port>  Port for OAuth callback server (default: 9876)
+  --help               Show this help message
 
 Examples:
   mcp-farmer vet http://localhost:3000/mcp
-  mcp-farmer vet http://localhost:3000/mcp --output json`);
+  mcp-farmer vet http://localhost:3000/mcp --output json
+  mcp-farmer vet https://secure-server.com/mcp --oauth`);
 }
 
 export async function vetCommand(args: string[]) {
@@ -27,6 +31,12 @@ export async function vetCommand(args: string[]) {
     args,
     options: {
       output: {
+        type: "string",
+      },
+      oauth: {
+        type: "boolean",
+      },
+      "oauth-port": {
         type: "string",
       },
       help: {
@@ -57,6 +67,15 @@ export async function vetCommand(args: string[]) {
 
   const outputJson = values.output === "json";
 
+  let oauthPort = 9876;
+  if (values["oauth-port"]) {
+    oauthPort = parseInt(values["oauth-port"], 10);
+    if (isNaN(oauthPort) || oauthPort < 1 || oauthPort > 65535) {
+      console.error(`Invalid OAuth port: ${values["oauth-port"]}`);
+      process.exit(2);
+    }
+  }
+
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(url);
@@ -65,8 +84,12 @@ export async function vetCommand(args: string[]) {
     process.exit(2);
   }
 
+  const authProvider = values.oauth
+    ? new CliOAuthProvider(oauthPort)
+    : undefined;
+
   const [connectionResult, healthResult] = await Promise.allSettled([
-    connect(parsedUrl),
+    connect(parsedUrl, authProvider),
     checkHealth(parsedUrl),
   ]);
 
