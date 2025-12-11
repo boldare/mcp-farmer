@@ -52,11 +52,50 @@ describe("checkInputDescriptions", () => {
 
     const findings = checkInputDescriptions(tool);
 
-    expect(findings).toEqual({
+    expect(findings).toEqual([
+      {
+        severity: "warning",
+        message: "Missing input description",
+        toolName: "my-tool",
+        inputName: "query",
+      },
+    ]);
+  });
+
+  test("returns warnings for all inputs missing descriptions", () => {
+    const tool = {
+      name: "my-tool",
+      description: "A tool",
+      inputSchema: {
+        type: "object",
+        properties: {
+          package: { type: "string" },
+          version: { type: "string" },
+          ecosystem: { type: "string" },
+        },
+      },
+    } as Tool;
+
+    const findings = checkInputDescriptions(tool);
+
+    expect(findings).toHaveLength(3);
+    expect(findings).toContainEqual({
       severity: "warning",
       message: "Missing input description",
       toolName: "my-tool",
-      inputName: "query",
+      inputName: "package",
+    });
+    expect(findings).toContainEqual({
+      severity: "warning",
+      message: "Missing input description",
+      toolName: "my-tool",
+      inputName: "version",
+    });
+    expect(findings).toContainEqual({
+      severity: "warning",
+      message: "Missing input description",
+      toolName: "my-tool",
+      inputName: "ecosystem",
     });
   });
 
@@ -74,7 +113,7 @@ describe("checkInputDescriptions", () => {
 
     const findings = checkInputDescriptions(tool);
 
-    expect(findings).toBeNull();
+    expect(findings).toEqual([]);
   });
 });
 

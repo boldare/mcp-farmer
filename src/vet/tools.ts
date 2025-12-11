@@ -33,22 +33,23 @@ export function checkToolDescriptions(tool: Tool): Finding | null {
   return null;
 }
 
-export function checkInputDescriptions(tool: Tool): Finding | null {
+export function checkInputDescriptions(tool: Tool): Finding[] {
   const schema = tool.inputSchema as Schema | undefined;
   const properties = schema?.properties ?? {};
+  const findings: Finding[] = [];
 
   for (const [inputName, prop] of Object.entries(properties)) {
     if (!prop.description) {
-      return {
+      findings.push({
         severity: "warning",
         message: "Missing input description",
         toolName: tool.name,
         inputName,
-      };
+      });
     }
   }
 
-  return null;
+  return findings;
 }
 
 const MAX_REQUIRED_INPUTS = 5;
@@ -267,7 +268,7 @@ export function runCheckers(tools: Tool[]): Finding[] {
   const perToolFindings = tools
     .flatMap((tool) => [
       checkToolDescriptions(tool),
-      checkInputDescriptions(tool),
+      ...checkInputDescriptions(tool),
       checkInputCount(tool),
       checkDangerousTools(tool),
     ])
