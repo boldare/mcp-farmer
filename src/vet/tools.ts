@@ -53,6 +53,53 @@ export function checkInputDescriptions(tool: Tool): Finding | null {
 
 const MAX_REQUIRED_INPUTS = 5;
 const MAX_TOOLS = 30;
+const SIMILARITY_THRESHOLD = 0.7;
+
+const STOP_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "but",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "to",
+  "of",
+  "in",
+  "for",
+  "on",
+  "with",
+  "at",
+  "by",
+  "from",
+  "as",
+  "it",
+  "this",
+  "that",
+  "which",
+  "can",
+  "will",
+  "do",
+  "does",
+  "did",
+  "has",
+  "have",
+  "had",
+  "if",
+  "then",
+  "than",
+  "so",
+  "just",
+  "also",
+  "into",
+  "its",
+]);
 
 const DANGEROUS_WORDS = [
   // File system destruction
@@ -93,6 +140,28 @@ export function tokenize(name: string): string[] {
     .toLowerCase()
     .split(/[-_\s]+/)
     .filter(Boolean);
+}
+
+function tokenizeDescription(description: string): Set<string> {
+  const words = description
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 1 && !STOP_WORDS.has(word));
+
+  return new Set(words);
+}
+
+function jaccardSimilarity(setA: Set<string>, setB: Set<string>): number {
+  if (setA.size === 0 || setB.size === 0) return 0;
+
+  let intersectionSize = 0;
+  for (const item of setA) {
+    if (setB.has(item)) intersectionSize++;
+  }
+
+  const unionSize = setA.size + setB.size - intersectionSize;
+  return intersectionSize / unionSize;
 }
 
 export function checkDangerousTools(tool: Tool): Finding | null {
@@ -159,6 +228,41 @@ export function checkTotalToolCount(tools: Tool[]): Finding | null {
   return null;
 }
 
+const MIN_TOKENS_FOR_COMPARISON = 3;
+
+export function checkSimilarDescriptions(tools: Tool[]): Finding[] {
+  const findings: Finding[] = [];
+
+  const tokenized = tools
+    .filter((tool) => tool.description)
+    .map((tool) => ({
+      name: tool.name,
+      tokens: tokenizeDescription(tool.description ?? ""),
+    }))
+    .filter((t) => t.tokens.size >= MIN_TOKENS_FOR_COMPARISON);
+
+  for (let i = 0; i < tokenized.length; i++) {
+    const toolA = tokenized[i];
+    for (let j = i + 1; j < tokenized.length; j++) {
+      const toolB = tokenized[j];
+      if (!toolA || !toolB) continue;
+
+      const similarity = jaccardSimilarity(toolA.tokens, toolB.tokens);
+
+      if (similarity >= SIMILARITY_THRESHOLD) {
+        const percentage = Math.round(similarity * 100);
+        findings.push({
+          severity: "warning",
+          message: `Similar descriptions detected (${percentage}% overlap). Consider making descriptions more distinct to help LLMs differentiate between tools`,
+          toolName: `${toolA.name}, ${toolB.name}`,
+        });
+      }
+    }
+  }
+
+  return findings;
+}
+
 export function runCheckers(tools: Tool[]): Finding[] {
   const perToolFindings = tools
     .flatMap((tool) => [
@@ -172,6 +276,7 @@ export function runCheckers(tools: Tool[]): Finding[] {
   const serverFindings = [
     checkDuplicateToolNames(tools),
     checkTotalToolCount(tools),
+    checkSimilarDescriptions(tools),
   ]
     .flat()
     .filter((f): f is Finding => f !== null);

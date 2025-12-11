@@ -8,6 +8,7 @@ import {
   checkDuplicateToolNames,
   checkTotalToolCount,
   checkDangerousTools,
+  checkSimilarDescriptions,
   tokenize,
 } from "./tools.js";
 
@@ -306,5 +307,61 @@ describe("checkDangerousTools", () => {
     const tool = { name: toolName, description: "Test" } as Tool;
 
     expect(checkDangerousTools(tool)).toBeNull();
+  });
+});
+
+describe("checkSimilarDescriptions", () => {
+  test.each<{ name: string; tools: Tool[]; expectFindings: boolean }>([
+    {
+      name: "detects similar descriptions",
+      tools: [
+        {
+          name: "searchUsers",
+          description: "Search for users in the database by name or email",
+        },
+        {
+          name: "findUsers",
+          description:
+            "Search for users in the database by name or email address",
+        },
+      ] as Tool[],
+      expectFindings: true,
+    },
+    {
+      name: "ignores distinct descriptions",
+      tools: [
+        {
+          name: "searchUsers",
+          description: "Search for users in the database by name or email",
+        },
+        {
+          name: "createReport",
+          description: "Generate a PDF report with analytics data and charts",
+        },
+      ] as Tool[],
+      expectFindings: false,
+    },
+    {
+      name: "ignores short descriptions",
+      tools: [
+        { name: "tool1", description: "Do it" },
+        { name: "tool2", description: "Do it" },
+      ] as Tool[],
+      expectFindings: false,
+    },
+    {
+      name: "ignores tools without descriptions",
+      tools: [{ name: "tool1" }, { name: "tool2" }] as Tool[],
+      expectFindings: false,
+    },
+  ])("$name", ({ tools, expectFindings }) => {
+    const findings = checkSimilarDescriptions(tools);
+
+    if (expectFindings) {
+      expect(findings.length).toBeGreaterThan(0);
+      expect(findings[0]?.message).toContain("Similar descriptions detected");
+    } else {
+      expect(findings).toEqual([]);
+    }
   });
 });
