@@ -2,9 +2,19 @@ import { parseArgs } from "util";
 
 import { runCheckers } from "./tools.js";
 import { checkHealth } from "./health.js";
-import { printHealth, printResults, printAuthError } from "./reporter.js";
 import { connect, AuthenticationRequiredError } from "./mcp.js";
 import { CliOAuthProvider } from "./oauth.js";
+import { consoleReporter } from "./reporters/console.js";
+import { jsonReporter } from "./reporters/json.js";
+import { htmlReporter } from "./reporters/html.js";
+
+const reporters = {
+  console: consoleReporter,
+  json: jsonReporter,
+  html: htmlReporter,
+} as const;
+
+type OutputFormat = "json" | "html";
 
 function printHelp() {
   console.log(`Usage: mcp-farmer vet <url> [options]
@@ -15,7 +25,7 @@ Arguments:
   url                  The URL of the MCP server to connect to
 
 Options:
-  --output json        Output results as JSON to stdout
+  --output json|html   Output format (json or html)
   --oauth              Enable OAuth authentication flow
   --oauth-port <port>  Port for OAuth callback server (default: 9876)
   --help               Show this help message
@@ -23,6 +33,7 @@ Options:
 Examples:
   mcp-farmer vet http://localhost:3000/mcp
   mcp-farmer vet http://localhost:3000/mcp --output json
+  mcp-farmer vet http://localhost:3000/mcp --output html > report.html
   mcp-farmer vet https://secure-server.com/mcp --oauth`);
 }
 
@@ -60,12 +71,15 @@ export async function vetCommand(args: string[]) {
     process.exit(2);
   }
 
-  if (values.output && values.output !== "json") {
-    console.error(`Invalid output format: ${values.output}`);
+  if (values.output && values.output !== "json" && values.output !== "html") {
+    console.error(
+      `Invalid output format: ${values.output}. Use 'json' or 'html'.`,
+    );
     process.exit(2);
   }
 
-  const outputJson = values.output === "json";
+  const outputFormat = values.output as OutputFormat | undefined;
+  const reporter = reporters[outputFormat ?? "console"];
 
   let oauthPort = 9876;
   if (values["oauth-port"]) {
@@ -96,22 +110,18 @@ export async function vetCommand(args: string[]) {
   if (connectionResult.status === "rejected") {
     const error = connectionResult.reason;
     if (error instanceof AuthenticationRequiredError) {
-      if (outputJson) {
-        console.log(
-          JSON.stringify(
-            {
-              error: "authentication_required",
-              message: error.message,
-              authHeader: error.authHeader,
-            },
-            null,
-            2,
-          ),
-        );
-        process.exit(1);
-      }
-
-      printAuthError(error);
+      const output = reporter({
+        url,
+        tools: [],
+        findings: [],
+        health: null,
+        toolsResponseTimeMs: 0,
+        authError: {
+          message: error.message,
+          authHeader: error.authHeader,
+        },
+      });
+      console.log(output);
       process.exit(1);
     }
     throw error;
@@ -123,9 +133,6 @@ export async function vetCommand(args: string[]) {
 
   try {
     const serverVersion = client.getServerVersion();
-    if (serverVersion) {
-      console.log(`Server: ${serverVersion.name} v${serverVersion.version}`);
-    }
 
     const startTime = performance.now();
     const { tools } = await client.listTools();
@@ -133,27 +140,16 @@ export async function vetCommand(args: string[]) {
 
     const findings = runCheckers(tools);
 
-    if (outputJson) {
-      console.log(
-        JSON.stringify(
-          {
-            tools,
-            health,
-            findings,
-            meta: { toolsResponseTimeMs },
-          },
-          null,
-          2,
-        ),
-      );
-      return;
-    }
-
-    console.log(`Tools response time: ${toolsResponseTimeMs.toFixed(2)}ms`);
-    if (health) {
-      printHealth(health);
-    }
-    printResults(tools, findings);
+    const output = reporter({
+      serverName: serverVersion?.name,
+      serverVersion: serverVersion?.version,
+      url,
+      tools,
+      findings,
+      health,
+      toolsResponseTimeMs,
+    });
+    console.log(output);
   } finally {
     await transport.close();
   }
