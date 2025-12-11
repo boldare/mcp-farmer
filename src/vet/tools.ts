@@ -52,6 +52,7 @@ export function checkInputDescriptions(tool: Tool): Finding | null {
 }
 
 const MAX_REQUIRED_INPUTS = 5;
+const MAX_TOOLS = 30;
 
 const DANGEROUS_WORDS = [
   // File system destruction
@@ -76,6 +77,8 @@ const DANGEROUS_WORDS = [
   "wipe",
   "purge",
   "erase",
+  "remove",
+  "delete",
 ] as const;
 
 /**
@@ -145,6 +148,17 @@ export function checkDuplicateToolNames(tools: Tool[]): Finding[] {
   return findings;
 }
 
+export function checkTotalToolCount(tools: Tool[]): Finding | null {
+  if (tools.length > MAX_TOOLS) {
+    return {
+      severity: "warning",
+      message: `Server exposes ${tools.length} tools. Consider reducing to ${MAX_TOOLS} or fewer for better LLM accuracy`,
+    };
+  }
+
+  return null;
+}
+
 export function runCheckers(tools: Tool[]): Finding[] {
   const perToolFindings = tools
     .flatMap((tool) => [
@@ -155,7 +169,12 @@ export function runCheckers(tools: Tool[]): Finding[] {
     ])
     .filter((f): f is Finding => f !== null);
 
-  const duplicateFindings = checkDuplicateToolNames(tools);
+  const serverFindings = [
+    checkDuplicateToolNames(tools),
+    checkTotalToolCount(tools),
+  ]
+    .flat()
+    .filter((f): f is Finding => f !== null);
 
-  return [...duplicateFindings, ...perToolFindings];
+  return [...serverFindings, ...perToolFindings];
 }

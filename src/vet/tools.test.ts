@@ -6,6 +6,7 @@ import {
   checkToolDescriptions,
   checkInputCount,
   checkDuplicateToolNames,
+  checkTotalToolCount,
   checkDangerousTools,
   tokenize,
 } from "./tools.js";
@@ -204,6 +205,48 @@ describe("checkDuplicateToolNames", () => {
   });
 });
 
+describe("checkTotalToolCount", () => {
+  function createTools(count: number): Tool[] {
+    return Array.from({ length: count }, (_, i) => ({
+      name: `tool-${i}`,
+      description: `Tool ${i}`,
+    })) as Tool[];
+  }
+
+  test("returns warning when server has more than 30 tools", () => {
+    const tools = createTools(31);
+    const finding = checkTotalToolCount(tools);
+
+    expect(finding).toEqual({
+      severity: "warning",
+      message:
+        "Server exposes 31 tools. Consider reducing to 30 or fewer for better LLM accuracy",
+    });
+  });
+
+  test("returns no finding when server has exactly 30 tools", () => {
+    const tools = createTools(30);
+
+    const finding = checkTotalToolCount(tools);
+
+    expect(finding).toBeNull();
+  });
+
+  test("returns no finding when server has fewer than 30 tools", () => {
+    const tools = createTools(12);
+
+    const finding = checkTotalToolCount(tools);
+
+    expect(finding).toBeNull();
+  });
+
+  test("returns no finding for empty tool list", () => {
+    const finding = checkTotalToolCount([]);
+
+    expect(finding).toBeNull();
+  });
+});
+
 describe("tokenize", () => {
   test.each([
     ["deleteFile", ["delete", "file"]],
@@ -257,8 +300,6 @@ describe("checkDangerousTools", () => {
     "formatter",
     "runQuery",
     "writeLog",
-    "deleteItem",
-    "removeFromCart",
     "executeTask",
     "commandParser",
   ])("returns no finding for safe tool: %s", (toolName) => {
