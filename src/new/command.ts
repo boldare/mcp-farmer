@@ -110,15 +110,24 @@ const scriptRunners: Record<PackageManager, string> = {
 async function addPackageScripts(
   packageJsonPath: string,
   packageManager: PackageManager,
+  transports: string[],
 ) {
   const content = await readFile(packageJsonPath, "utf-8");
   const pkg = JSON.parse(content);
 
   const runner = scriptRunners[packageManager];
+  const scripts: Record<string, string> = {};
+
+  if (transports.includes("http")) {
+    scripts.http = `${runner} http.ts`;
+  }
+  if (transports.includes("stdio")) {
+    scripts.stdio = `${runner} stdio.ts`;
+  }
+
   pkg.scripts = {
     ...pkg.scripts,
-    http: `${runner} http.ts`,
-    stdio: `${runner} stdio.ts`,
+    ...scripts,
   };
 
   await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
@@ -156,14 +165,28 @@ export async function newCommand(args: string[]) {
           message: "Language:",
           options: [{ value: "typescript", label: "TypeScript" }],
         }),
-      httpFramework: () =>
-        p.select({
+      transports: () =>
+        p.multiselect({
+          message: "Transport types:",
+          options: [
+            { value: "stdio", label: "stdio" },
+            { value: "http", label: "http" },
+          ],
+          required: true,
+        }),
+      httpFramework: ({ results }) => {
+        const transports = results.transports as string[];
+        if (!transports.includes("http")) {
+          return;
+        }
+        return p.select({
           message: "HTTP framework:",
           options: [
             { value: "native", label: "Native Node.js HTTP" },
             { value: "hono", label: "Hono" },
           ],
-        }),
+        });
+      },
       packageManager: () =>
         p.select({
           message: "Package manager:",
@@ -186,7 +209,9 @@ export async function newCommand(args: string[]) {
 
   const name = project.name as string;
   const path = project.path as string;
-  const httpFramework = project.httpFramework as "native" | "hono";
+  const transports = project.transports as string[];
+  const httpFramework =
+    (project.httpFramework as "native" | "hono") ?? "native";
   const packageManager = project.packageManager as PackageManager;
   const targetDir = join(process.cwd(), path);
 
@@ -212,7 +237,11 @@ export async function newCommand(args: string[]) {
       throw new Error(`Init failed with exit code ${exitCode}: ${stderr}`);
     }
 
-    await addPackageScripts(join(targetDir, "package.json"), packageManager);
+    await addPackageScripts(
+      join(targetDir, "package.json"),
+      packageManager,
+      transports,
+    );
 
     s.stop("Project initialized");
   } catch (error) {
@@ -227,13 +256,21 @@ export async function newCommand(args: string[]) {
     const replacements = { name };
     const httpTemplate = httpFramework === "hono" ? "http-hono.ts" : "http.ts";
 
-    await Promise.all([
+    const filesToCopy: Promise<void>[] = [
       copyTemplate("server.ts", join(targetDir, "server.ts"), replacements),
-      copyTemplate("stdio.ts", join(targetDir, "stdio.ts")),
-      copyTemplate(httpTemplate, join(targetDir, "http.ts")),
       copyTemplate("tsconfig.json", join(targetDir, "tsconfig.json")),
       copyTemplate("gitignore", join(targetDir, ".gitignore")),
-    ]);
+    ];
+
+    if (transports.includes("stdio")) {
+      filesToCopy.push(copyTemplate("stdio.ts", join(targetDir, "stdio.ts")));
+    }
+
+    if (transports.includes("http")) {
+      filesToCopy.push(copyTemplate(httpTemplate, join(targetDir, "http.ts")));
+    }
+
+    await Promise.all(filesToCopy);
 
     s.stop("Project files created");
   } catch (error) {
@@ -246,7 +283,7 @@ export async function newCommand(args: string[]) {
 
   try {
     const projectDependencies = [...dependencies];
-    if (httpFramework === "hono") {
+    if (transports.includes("http") && httpFramework === "hono") {
       projectDependencies.push("hono", "fetch-to-node");
     }
 
@@ -285,12 +322,23 @@ export async function newCommand(args: string[]) {
 
   const runPrefix = packageManager === "npm" ? "npm run" : packageManager;
 
+  const runCommands: string[] = [];
+  if (transports.includes("stdio")) {
+    runCommands.push(`${runPrefix} stdio   # stdio transport`);
+  }
+  if (transports.includes("http")) {
+    runCommands.push(`${runPrefix} http    # HTTP transport`);
+  }
+
+  const runInstructions =
+    runCommands.length > 0
+      ? `Run your server:\n${runCommands.map((cmd) => `  ${cmd}`).join("\n")}\n\n`
+      : "";
+
   p.outro(
     `Your MCP server is ready!\n\n` +
       `  cd ${path}\n\n` +
-      `Run your server:\n` +
-      `  ${runPrefix} stdio   # stdio transport\n` +
-      `  ${runPrefix} http    # HTTP transport\n\n` +
+      runInstructions +
       `Note: Requires Node.js 22+`,
   );
 }
