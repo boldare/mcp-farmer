@@ -18,6 +18,20 @@ Create a new MCP server project interactively.
 bun run cli.ts new
 ```
 
+The command will guide you through:
+
+- Server name and directory path
+- Language selection (TypeScript)
+- HTTP framework choice (Native Node.js HTTP or Hono)
+- Package manager selection (npm, pnpm, yarn, deno, bun)
+
+The scaffolded project includes:
+
+- Basic MCP server implementation with example tool
+- HTTP and stdio transport entry points
+- TypeScript configuration
+- Run scripts for both transports
+
 ### market
 
 Browse and install popular MCP servers to your client configuration. In the future, this will support MCP registries.

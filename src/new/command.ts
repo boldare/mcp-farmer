@@ -156,6 +156,14 @@ export async function newCommand(args: string[]) {
           message: "Language:",
           options: [{ value: "typescript", label: "TypeScript" }],
         }),
+      httpFramework: () =>
+        p.select({
+          message: "HTTP framework:",
+          options: [
+            { value: "native", label: "Native Node.js HTTP" },
+            { value: "hono", label: "Hono" },
+          ],
+        }),
       packageManager: () =>
         p.select({
           message: "Package manager:",
@@ -178,6 +186,7 @@ export async function newCommand(args: string[]) {
 
   const name = project.name as string;
   const path = project.path as string;
+  const httpFramework = project.httpFramework as "native" | "hono";
   const packageManager = project.packageManager as PackageManager;
   const targetDir = join(process.cwd(), path);
 
@@ -216,11 +225,12 @@ export async function newCommand(args: string[]) {
 
   try {
     const replacements = { name };
+    const httpTemplate = httpFramework === "hono" ? "http-hono.ts" : "http.ts";
 
     await Promise.all([
       copyTemplate("server.ts", join(targetDir, "server.ts"), replacements),
       copyTemplate("stdio.ts", join(targetDir, "stdio.ts")),
-      copyTemplate("http.ts", join(targetDir, "http.ts")),
+      copyTemplate(httpTemplate, join(targetDir, "http.ts")),
       copyTemplate("tsconfig.json", join(targetDir, "tsconfig.json")),
       copyTemplate("gitignore", join(targetDir, ".gitignore")),
     ]);
@@ -235,7 +245,12 @@ export async function newCommand(args: string[]) {
   s.start("Adding dependencies");
 
   try {
-    const addCmd = [...addCommands[packageManager], ...dependencies];
+    const projectDependencies = [...dependencies];
+    if (httpFramework === "hono") {
+      projectDependencies.push("hono", "fetch-to-node");
+    }
+
+    const addCmd = [...addCommands[packageManager], ...projectDependencies];
     const { exitCode, stderr } = await runCommand(addCmd, targetDir);
 
     if (exitCode !== 0) {
