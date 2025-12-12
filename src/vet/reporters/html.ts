@@ -1,4 +1,8 @@
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type {
+  Prompt,
+  Resource,
+  Tool,
+} from "@modelcontextprotocol/sdk/types.js";
 
 import type { Finding, Schema } from "../tools.js";
 import type { HealthCheckResult } from "../health.js";
@@ -7,6 +11,8 @@ import {
   type ReportData,
   formatType,
   getToolFindings,
+  extractToolSchema,
+  computeStats,
 } from "./shared.js";
 
 function escapeHtml(str: string): string {
@@ -18,10 +24,7 @@ function escapeHtml(str: string): string {
 }
 
 function renderTool(tool: Tool, findings: Finding[]): string {
-  const schema = tool.inputSchema as Schema | undefined;
-  const properties = schema?.properties ?? {};
-  const required = new Set(schema?.required ?? []);
-  const propNames = Object.keys(properties);
+  const { properties, required, propNames } = extractToolSchema(tool);
   const toolFindings = getToolFindings(findings, tool.name);
   const hasIssues = toolFindings.length > 0;
 
@@ -105,36 +108,99 @@ function renderTool(tool: Tool, findings: Finding[]): string {
 
 function renderSummary(
   tools: Tool[],
+  resourcesSupported: boolean,
+  promptsSupported: boolean,
+  resources: Resource[] | null,
+  prompts: Prompt[] | null,
   findings: Finding[],
   health: HealthCheckResult | null,
-  responseMs: number,
 ): string {
-  const toolDescMissing = findings.filter(
-    (f) => f.message === "Missing tool description",
-  ).length;
-  const inputDescMissing = findings.filter(
-    (f) => f.message === "Missing input description",
-  ).length;
-
-  let totalInputs = 0;
-  for (const tool of tools) {
-    const schema = tool.inputSchema as Schema | undefined;
-    totalInputs += Object.keys(schema?.properties ?? {}).length;
-  }
+  const stats = computeStats(tools, findings);
 
   const issues: string[] = [];
-  if (toolDescMissing > 0) issues.push(`${toolDescMissing} tool desc missing`);
-  if (inputDescMissing > 0)
-    issues.push(`${inputDescMissing} input desc missing`);
+  if (stats.toolDescMissing > 0)
+    issues.push(`${stats.toolDescMissing} tool desc missing`);
+  if (stats.inputDescMissing > 0)
+    issues.push(`${stats.inputDescMissing} input desc missing`);
+
+  const resourcesCount = !resourcesSupported
+    ? "Not supported"
+    : resources === null
+      ? "Unavailable"
+      : String(resources.length);
+  const promptsCount = !promptsSupported
+    ? "Not supported"
+    : prompts === null
+      ? "Unavailable"
+      : String(prompts.length);
 
   return `
     <dl class="summary">
-      <div><dt>Tools</dt><dd>${tools.length}</dd></div>
-      <div><dt>Inputs</dt><dd>${totalInputs}</dd></div>
-      <div><dt>Response</dt><dd>${responseMs.toFixed(0)}ms</dd></div>
+      <div><dt>Tools</dt><dd>${stats.totalTools}</dd></div>
+      <div><dt>Prompts</dt><dd>${promptsCount}</dd></div>
+      <div><dt>Resources</dt><dd>${resourcesCount}</dd></div>
+      <div><dt>Inputs</dt><dd>${stats.totalInputs}</dd></div>
       ${health ? `<div><dt>/health</dt><dd class="${health.available ? "ok" : "err"}">${health.available ? `${health.status} OK` : "unavailable"}</dd></div>` : ""}
       ${issues.length > 0 ? `<div class="issues"><dt>Issues</dt><dd>${issues.join(", ")}</dd></div>` : ""}
     </dl>`;
+}
+
+function renderResources(
+  resources: Resource[] | null,
+  supported: boolean,
+): string {
+  if (!supported) {
+    return '<p class="empty">Not supported by server</p>';
+  }
+  if (resources === null) {
+    return '<p class="empty">Unavailable</p>';
+  }
+  if (resources.length === 0) {
+    return '<p class="empty">No resources exposed</p>';
+  }
+
+  const rows = resources
+    .map((r) => {
+      return `<tr>
+        <td class="name"><code>${escapeHtml(r.name)}</code></td>
+        <td class="type"><code>${escapeHtml(r.uri)}</code></td>
+        <td class="desc">${r.description ? escapeHtml(r.description) : "—"}</td>
+      </tr>`;
+    })
+    .join("");
+
+  return `<table class="inputs"><tbody>${rows}</tbody></table>`;
+}
+
+function renderPrompts(prompts: Prompt[] | null, supported: boolean): string {
+  if (!supported) {
+    return '<p class="empty">Not supported by server</p>';
+  }
+  if (prompts === null) {
+    return '<p class="empty">Unavailable</p>';
+  }
+  if (prompts.length === 0) {
+    return '<p class="empty">No prompts exposed</p>';
+  }
+
+  const rows = prompts
+    .map((p) => {
+      const args =
+        p.arguments && p.arguments.length > 0
+          ? p.arguments
+              .map((a) => `${a.required ? "*" : ""}${a.name}`)
+              .join(", ")
+          : "";
+
+      return `<tr>
+        <td class="name"><code>${escapeHtml(p.name)}</code></td>
+        <td class="type">${args ? `<code>${escapeHtml(args)}</code>` : "—"}</td>
+        <td class="desc">${p.description ? escapeHtml(p.description) : "—"}</td>
+      </tr>`;
+    })
+    .join("");
+
+  return `<table class="inputs"><tbody>${rows}</tbody></table>`;
 }
 
 const css = `
@@ -227,6 +293,7 @@ h2 {
 .issues code { font-size: 0.7rem; }
 .empty { color: var(--fg3); font-size: 0.8rem; }
 .section-label { font-size: 0.7rem; font-weight: 600; color: var(--fg3); margin: 0.75rem 0 0.375rem; }
+h2 .timing { font-weight: 400; color: var(--fg3); }
 footer {
   margin-top: 2.5rem;
   padding-top: 0.75rem;
@@ -249,9 +316,15 @@ export const htmlReporter: Reporter = (data: ReportData): string => {
     serverVersion,
     target,
     tools,
+    resourcesSupported,
+    promptsSupported,
+    resources,
+    prompts,
     findings,
     health,
     toolsResponseTimeMs,
+    resourcesResponseTimeMs,
+    promptsResponseTimeMs,
   } = data;
 
   const title =
@@ -276,10 +349,24 @@ export const htmlReporter: Reporter = (data: ReportData): string => {
     <p class="meta">${escapeHtml(target)}</p>
   </header>
 
-  ${renderSummary(tools, findings, health, toolsResponseTimeMs)}
+  ${renderSummary(
+    tools,
+    resourcesSupported,
+    promptsSupported,
+    resources,
+    prompts,
+    findings,
+    health,
+  )}
 
-  <h2>Tools</h2>
+  <h2>Tools ${toolsResponseTimeMs !== null ? `<span class="timing">(${toolsResponseTimeMs.toFixed(0)}ms)</span>` : ""}</h2>
   ${toolsHtml}
+
+  <h2>Prompts ${promptsResponseTimeMs !== null ? `<span class="timing">(${promptsResponseTimeMs.toFixed(0)}ms)</span>` : ""}</h2>
+  ${renderPrompts(prompts, promptsSupported)}
+
+  <h2>Resources ${resourcesResponseTimeMs !== null ? `<span class="timing">(${resourcesResponseTimeMs.toFixed(0)}ms)</span>` : ""}</h2>
+  ${renderResources(resources, resourcesSupported)}
 
   <footer><a href="https://github.com/boldare/mcp-farmer" target="_blank" rel="noopener noreferrer">mcp-farmer</a> · ${new Date().toISOString().split("T")[0]}</footer>
 </body>

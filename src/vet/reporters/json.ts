@@ -16,10 +16,22 @@ export const jsonReporter: Reporter = (data: ReportData): string => {
 
   return JSON.stringify(
     {
-      tools: data.tools,
+      tools: {
+        items: data.tools,
+        responseTimeMs: data.toolsResponseTimeMs,
+      },
+      prompts: {
+        supported: data.promptsSupported,
+        items: data.prompts,
+        responseTimeMs: data.promptsResponseTimeMs,
+      },
+      resources: {
+        supported: data.resourcesSupported,
+        items: data.resources,
+        responseTimeMs: data.resourcesResponseTimeMs,
+      },
       health: data.health,
       findings: data.findings,
-      meta: { toolsResponseTimeMs: data.toolsResponseTimeMs },
     },
     null,
     2,

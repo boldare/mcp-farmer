@@ -1,4 +1,8 @@
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type {
+  Prompt,
+  Resource,
+  Tool,
+} from "@modelcontextprotocol/sdk/types.js";
 
 import type { Finding, Schema } from "../tools.js";
 import type { HealthCheckResult } from "../health.js";
@@ -7,6 +11,9 @@ import {
   type ReportData,
   formatType,
   getToolFindings,
+  extractToolSchema,
+  computeStats,
+  groupFindingsBySeverity,
 } from "./shared.js";
 
 // Styling constants
@@ -48,13 +55,8 @@ function wrapText(str: string, maxLength: number): string[] {
 
 function formatTool(tool: Tool, findings: Finding[]): string {
   const lines: string[] = [];
-  const schema = tool.inputSchema as Schema | undefined;
-  const properties = schema?.properties ?? {};
-  const required = new Set(schema?.required ?? []);
-  const propNames = Object.keys(properties);
-
-  const requiredCount = propNames.filter((n) => required.has(n)).length;
-  const optionalCount = propNames.length - requiredCount;
+  const { properties, required, propNames, requiredCount, optionalCount } =
+    extractToolSchema(tool);
 
   const toolFindings = getToolFindings(findings, tool.name);
   const hasToolDescWarning = toolFindings.some(
@@ -165,9 +167,7 @@ function formatFindings(findings: Finding[]): string {
   lines.push(`\n${DIM}${"─".repeat(60)}${RESET}`);
   lines.push(`${BOLD}Findings${RESET}\n`);
 
-  const errors = findings.filter((f) => f.severity === "error");
-  const warnings = findings.filter((f) => f.severity === "warning");
-  const infos = findings.filter((f) => f.severity === "info");
+  const { errors, warnings, infos } = groupFindingsBySeverity(findings);
 
   if (errors.length > 0) {
     lines.push(`${BOLD}Errors (${errors.length})${RESET}`);
@@ -211,41 +211,27 @@ function formatFindings(findings: Finding[]): string {
 }
 
 function formatSummary(tools: Tool[], findings: Finding[]): string {
+  const stats = computeStats(tools, findings);
   const lines: string[] = [];
-  const total = tools.length;
-  const toolDescFindings = findings.filter(
-    (f) => f.message === "Missing tool description",
-  );
-  const inputDescFindings = findings.filter(
-    (f) => f.message === "Missing input description",
-  );
-
-  // Count total inputs
-  let totalInputs = 0;
-  for (const tool of tools) {
-    const schema = tool.inputSchema as Schema | undefined;
-    const props = schema?.properties ?? {};
-    totalInputs += Object.keys(props).length;
-  }
 
   lines.push(`\n${DIM}${"─".repeat(60)}${RESET}`);
   lines.push(`${BOLD}Summary${RESET}`);
-  lines.push(`  Tools: ${total}`);
+  lines.push(`  Tools: ${stats.totalTools}`);
 
   // Tool descriptions
-  if (toolDescFindings.length > 0) {
+  if (stats.toolDescMissing > 0) {
     lines.push(
-      `  ${CROSS} ${toolDescFindings.length}/${total} tools missing description`,
+      `  ${CROSS} ${stats.toolDescMissing}/${stats.totalTools} tools missing description`,
     );
   } else {
     lines.push(`  ${CHECK} All tools have descriptions`);
   }
 
   // Input documentation
-  if (totalInputs > 0) {
-    if (inputDescFindings.length > 0) {
+  if (stats.totalInputs > 0) {
+    if (stats.inputDescMissing > 0) {
       lines.push(
-        `  ${WARN} ${inputDescFindings.length}/${totalInputs} inputs missing description`,
+        `  ${WARN} ${stats.inputDescMissing}/${stats.totalInputs} inputs missing description`,
       );
     } else {
       lines.push(`  ${CHECK} All inputs documented`);
@@ -255,18 +241,25 @@ function formatSummary(tools: Tool[], findings: Finding[]): string {
   return lines.join("\n");
 }
 
-function formatResults(tools: Tool[], findings: Finding[]): string {
-  if (tools.length === 0) {
-    return "\nNo tools available";
-  }
-
+function formatResults(
+  tools: Tool[],
+  findings: Finding[],
+  responseTimeMs: number,
+): string {
   const lines: string[] = [];
-  lines.push(`\n${BOLD}Tools (${tools.length})${RESET}`);
-  for (const tool of tools) {
-    lines.push(formatTool(tool, findings));
+  const timingInfo = `${DIM}(${responseTimeMs.toFixed(2)}ms)${RESET}`;
+
+  if (tools.length === 0) {
+    lines.push(`\n${BOLD}Tools (0)${RESET} ${timingInfo}`);
+    lines.push(`  ${DIM}none${RESET}`);
+  } else {
+    lines.push(`\n${BOLD}Tools (${tools.length})${RESET} ${timingInfo}`);
+    for (const tool of tools) {
+      lines.push(formatTool(tool, findings));
+    }
+    lines.push(formatFindings(findings));
+    lines.push(formatSummary(tools, findings));
   }
-  lines.push(formatFindings(findings));
-  lines.push(formatSummary(tools, findings));
   return lines.join("\n");
 }
 
@@ -301,15 +294,102 @@ export const consoleReporter: Reporter = (data: ReportData): string => {
   if (data.serverName && data.serverVersion) {
     lines.push(`Server: ${data.serverName} v${data.serverVersion}`);
   }
-  lines.push(`Tools response time: ${data.toolsResponseTimeMs.toFixed(2)}ms`);
 
   // Health
   if (data.health) {
     lines.push(formatHealth(data.health));
   }
 
-  // Results
-  lines.push(formatResults(data.tools, data.findings));
+  // Tools (with timing)
+  lines.push(
+    formatResults(data.tools, data.findings, data.toolsResponseTimeMs),
+  );
+
+  // Prompts (with timing)
+  lines.push(
+    formatPrompts(
+      data.prompts,
+      data.promptsSupported,
+      data.promptsResponseTimeMs,
+    ),
+  );
+
+  // Resources (with timing)
+  lines.push(
+    formatResources(
+      data.resources,
+      data.resourcesSupported,
+      data.resourcesResponseTimeMs,
+    ),
+  );
 
   return lines.join("\n");
 };
+
+function formatResources(
+  resources: Resource[] | null,
+  supported: boolean,
+  responseTimeMs: number | null,
+): string {
+  const timingInfo =
+    responseTimeMs !== null
+      ? ` ${DIM}(${responseTimeMs.toFixed(2)}ms)${RESET}`
+      : "";
+
+  if (!supported) {
+    return `\n${BOLD}Resources${RESET}\n  ${DIM}Not supported by server${RESET}`;
+  }
+  if (resources === null) {
+    return `\n${BOLD}Resources${RESET}\n  ${DIM}Unavailable${RESET}`;
+  }
+  if (resources.length === 0) {
+    return `\n${BOLD}Resources (0)${RESET}${timingInfo}\n  ${DIM}none${RESET}`;
+  }
+
+  const lines: string[] = [];
+  lines.push(`\n${BOLD}Resources (${resources.length})${RESET}${timingInfo}`);
+  for (const r of resources) {
+    lines.push(`  ${BOLD}${r.name}${RESET} ${DIM}(${r.uri})${RESET}`);
+    if (r.description) {
+      lines.push(`    ${DIM}${truncate(r.description, 90)}${RESET}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function formatPrompts(
+  prompts: Prompt[] | null,
+  supported: boolean,
+  responseTimeMs: number | null,
+): string {
+  const timingInfo =
+    responseTimeMs !== null
+      ? ` ${DIM}(${responseTimeMs.toFixed(2)}ms)${RESET}`
+      : "";
+
+  if (!supported) {
+    return `\n${BOLD}Prompts${RESET}\n  ${DIM}Not supported by server${RESET}`;
+  }
+  if (prompts === null) {
+    return `\n${BOLD}Prompts${RESET}\n  ${DIM}Unavailable${RESET}`;
+  }
+  if (prompts.length === 0) {
+    return `\n${BOLD}Prompts (0)${RESET}${timingInfo}\n  ${DIM}none${RESET}`;
+  }
+
+  const lines: string[] = [];
+  lines.push(`\n${BOLD}Prompts (${prompts.length})${RESET}${timingInfo}`);
+  for (const p of prompts) {
+    lines.push(`  ${BOLD}${p.name}${RESET}`);
+    if (p.description) {
+      lines.push(`    ${DIM}${truncate(p.description, 90)}${RESET}`);
+    }
+    if (p.arguments && p.arguments.length > 0) {
+      const args = p.arguments
+        .map((a) => `${a.required ? "*" : ""}${a.name}`)
+        .join(", ");
+      lines.push(`    ${DIM}Args: ${args}${RESET}`);
+    }
+  }
+  return lines.join("\n");
+}

@@ -19,6 +19,20 @@ const reporters = {
   html: htmlReporter,
 } as const;
 
+async function timed<T>(
+  promise: Promise<T>,
+): Promise<
+  { ok: true; value: T; ms: number } | { ok: false; error: unknown; ms: number }
+> {
+  const start = performance.now();
+  try {
+    const value = await promise;
+    return { ok: true, value, ms: performance.now() - start };
+  } catch (error) {
+    return { ok: false, error, ms: performance.now() - start };
+  }
+}
+
 async function runVet(
   client: Client,
   transport: Transport,
@@ -28,10 +42,29 @@ async function runVet(
 ): Promise<void> {
   try {
     const serverVersion = client.getServerVersion();
+    const capabilities = client.getServerCapabilities();
+    const resourcesSupported = Boolean(capabilities?.resources);
+    const promptsSupported = Boolean(capabilities?.prompts);
 
-    const startTime = performance.now();
-    const { tools } = await client.listTools();
-    const toolsResponseTimeMs = performance.now() - startTime;
+    const [toolsResult, resourcesResult, promptsResult] = await Promise.all([
+      timed(client.listTools()),
+      resourcesSupported ? timed(client.listResources()) : null,
+      promptsSupported ? timed(client.listPrompts()) : null,
+    ]);
+
+    const tools = toolsResult.ok ? toolsResult.value.tools : [];
+    const resources =
+      resourcesResult && resourcesResult.ok
+        ? resourcesResult.value.resources
+        : null;
+    const prompts =
+      promptsResult && promptsResult.ok ? promptsResult.value.prompts : null;
+
+    const toolsResponseTimeMs = toolsResult.ok ? toolsResult.ms : 0;
+    const resourcesResponseTimeMs =
+      resourcesResult && resourcesResult.ok ? resourcesResult.ms : null;
+    const promptsResponseTimeMs =
+      promptsResult && promptsResult.ok ? promptsResult.ms : null;
 
     const findings = runCheckers(tools);
 
@@ -40,9 +73,15 @@ async function runVet(
       serverVersion: serverVersion?.version,
       target,
       tools,
+      resourcesSupported,
+      promptsSupported,
+      resources,
+      prompts,
       findings,
       health,
       toolsResponseTimeMs,
+      resourcesResponseTimeMs,
+      promptsResponseTimeMs,
     });
     console.log(output);
   } finally {
@@ -216,9 +255,15 @@ export async function vetCommand(args: string[]) {
       const output = reporter({
         target: target.url.toString(),
         tools: [],
+        resourcesSupported: false,
+        promptsSupported: false,
+        resources: null,
+        prompts: null,
         findings: [],
         health: null,
         toolsResponseTimeMs: 0,
+        resourcesResponseTimeMs: null,
+        promptsResponseTimeMs: null,
         authError: {
           message: error.message,
           authHeader: error.authHeader,
