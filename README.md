@@ -58,6 +58,9 @@ Examples:
 # HTTP server
 bun run cli.ts vet http://localhost:3000/mcp
 
+# Pipe large output to less
+bun run cli.ts vet https://mcp.svelte.dev/mcp | less
+
 # Stdio server with HTML report
 bun run cli.ts vet --output html -- bunx @playwright/mcp@latest > report.html
 ```
