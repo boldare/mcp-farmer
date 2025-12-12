@@ -18,6 +18,21 @@ Create a new MCP server project interactively.
 bun run cli.ts new
 ```
 
+### market
+
+Browse and install popular MCP servers to your client configuration. In the future, this will support MCP registries.
+
+```bash
+bun run cli.ts market
+```
+
+The command will guide you through:
+
+- Selecting an MCP server from the curated list
+- Choosing your MCP client (Claude Desktop, VS Code, Continue, etc.)
+- Picking a package runner (npx, bunx, pnpm dlx, yarn dlx)
+- Adding the server configuration to your client's config file
+
 ### vet
 
 Vet an MCP server by connecting and running quality checks on its exposed tools.
