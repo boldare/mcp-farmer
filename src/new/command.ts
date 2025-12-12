@@ -99,6 +99,31 @@ async function copyTemplate(
   await writeFile(targetPath, content);
 }
 
+const scriptRunners: Record<PackageManager, string> = {
+  npm: "node",
+  pnpm: "node",
+  yarn: "node",
+  deno: "deno run",
+  bun: "bun",
+};
+
+async function addPackageScripts(
+  packageJsonPath: string,
+  packageManager: PackageManager,
+) {
+  const content = await readFile(packageJsonPath, "utf-8");
+  const pkg = JSON.parse(content);
+
+  const runner = scriptRunners[packageManager];
+  pkg.scripts = {
+    ...pkg.scripts,
+    http: `${runner} http.ts`,
+    stdio: `${runner} stdio.ts`,
+  };
+
+  await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+}
+
 export async function newCommand(args: string[]) {
   if (args.includes("--help") || args.includes("-h")) {
     printHelp();
@@ -178,6 +203,8 @@ export async function newCommand(args: string[]) {
       throw new Error(`Init failed with exit code ${exitCode}: ${stderr}`);
     }
 
+    await addPackageScripts(join(targetDir, "package.json"), packageManager);
+
     s.stop("Project initialized");
   } catch (error) {
     s.stop("Failed to initialize project");
@@ -241,5 +268,14 @@ export async function newCommand(args: string[]) {
     process.exit(1);
   }
 
-  p.outro(`Your MCP server is ready!\n\n  cd ${path}`);
+  const runPrefix = packageManager === "npm" ? "npm run" : packageManager;
+
+  p.outro(
+    `Your MCP server is ready!\n\n` +
+      `  cd ${path}\n\n` +
+      `Run your server:\n` +
+      `  ${runPrefix} stdio   # stdio transport\n` +
+      `  ${runPrefix} http    # HTTP transport\n\n` +
+      `Note: Requires Node.js 22+`,
+  );
 }
