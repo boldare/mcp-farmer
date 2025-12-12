@@ -5,6 +5,12 @@ import { createMcpServer } from "./server.js";
 const PORT = 3000;
 
 const httpServer = createHttpServer(async (req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok" }));
+    return;
+  }
+
   if (req.url !== "/mcp") {
     res.writeHead(404);
     res.end("Not Found");

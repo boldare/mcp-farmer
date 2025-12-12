@@ -75,6 +75,10 @@ app.delete("/mcp", async (c) => {
   );
 });
 
+app.get("/health", async (c) => {
+  return c.json({ status: "ok" }, { status: 200 });
+});
+
 console.log(`MCP server listening on http://localhost:${PORT}/mcp`);
 
 export default app;
