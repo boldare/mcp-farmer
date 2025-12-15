@@ -48,30 +48,46 @@ function normalizeServerName(name: string): string {
   return name.toLowerCase().replace(/\s+/g, "-");
 }
 
-function getConfigKey(clientId: string): "mcpServers" | "servers" {
-  return clientId === "vscode" ? "servers" : "mcpServers";
+function getConfigKey(clientId: string): "mcpServers" | "servers" | "mcp" {
+  if (clientId === "vscode") return "servers";
+  if (clientId === "opencode") return "mcp";
+  return "mcpServers";
 }
 
 interface McpServerConfig {
-  command?: string;
+  command?: string | string[];
   args?: string[];
   url?: string;
-  type?: "http" | "stdio";
+  type?: "http" | "stdio" | "local" | "remote";
+  enabled?: boolean;
 }
 
 function buildServerConfig(
   runner: PackageRunner | undefined,
   packageName?: string,
   url?: string,
+  clientId?: string,
 ): McpServerConfig {
+  const isOpencode = clientId === "opencode";
+
   if (url) {
-    return { url, type: "http" };
+    return isOpencode
+      ? { type: "remote", url, enabled: true }
+      : { url, type: "http" };
   }
 
   if (!runner || !packageName) {
     throw new Error(
       "Runner and packageName are required for package-based servers",
     );
+  }
+
+  if (isOpencode) {
+    return {
+      type: "local",
+      command: [runner.command, ...runner.args, packageName],
+      enabled: true,
+    };
   }
 
   return {
@@ -84,7 +100,7 @@ export async function saveServerConfig(
   configPath: string,
   serverName: string,
   serverConfig: McpServerConfig,
-  configKey: "mcpServers" | "servers",
+  configKey: "mcpServers" | "servers" | "mcp",
 ): Promise<void> {
   await mkdir(dirname(configPath), { recursive: true });
 
@@ -182,7 +198,12 @@ export async function marketCommand(args: string[]) {
   }
 
   const serverName = normalizeServerName(server.name);
-  const serverConfig = buildServerConfig(runner, server.package, server.url);
+  const serverConfig = buildServerConfig(
+    runner,
+    server.package,
+    server.url,
+    client.id,
+  );
   const configKey = getConfigKey(client.id);
 
   p.note(

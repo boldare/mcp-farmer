@@ -281,4 +281,68 @@ describe("saveServerConfig", () => {
 }
 `);
   });
+
+  test("uses 'mcp' key for opencode config with local server", async () => {
+    const serverConfig = {
+      type: "local" as const,
+      command: ["npx", "-y", "@modelcontextprotocol/server-example"],
+      enabled: true,
+    };
+
+    await saveServerConfig(
+      configPath,
+      "opencode-local-server",
+      serverConfig,
+      "mcp",
+    );
+
+    const content = await readFile(configPath, "utf-8");
+    const config = JSON.parse(content);
+
+    expect(config).toMatchInlineSnapshot(`
+{
+  "mcp": {
+    "opencode-local-server": {
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-example",
+      ],
+      "enabled": true,
+      "type": "local",
+    },
+  },
+}
+`);
+  });
+
+  test("uses 'mcp' key for opencode config with remote server", async () => {
+    const serverConfig = {
+      type: "remote" as const,
+      url: "https://mcp.example.com/mcp",
+      enabled: true,
+    };
+
+    await saveServerConfig(
+      configPath,
+      "opencode-remote-server",
+      serverConfig,
+      "mcp",
+    );
+
+    const content = await readFile(configPath, "utf-8");
+    const config = JSON.parse(content);
+
+    expect(config).toMatchInlineSnapshot(`
+{
+  "mcp": {
+    "opencode-remote-server": {
+      "enabled": true,
+      "type": "remote",
+      "url": "https://mcp.example.com/mcp",
+    },
+  },
+}
+`);
+  });
 });

@@ -69,4 +69,10 @@ export const mcpClients: McpClient[] = [
     path: join(process.cwd(), ".mcp.json"),
     hint: ".mcp.json",
   },
+  {
+    id: "opencode",
+    displayName: "OpenCode",
+    path: join(process.cwd(), "opencode.json"),
+    hint: "opencode.json",
+  },
 ];

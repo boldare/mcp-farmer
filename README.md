@@ -57,7 +57,7 @@ mcp-farmer market
 The command will guide you through:
 
 - Selecting an MCP server from the curated list
-- Choosing your MCP client (Claude Desktop, VS Code, Continue, etc.)
+- Choosing your MCP client (Claude Code, Claude Desktop, Cursor, VS Code, OpenCode, etc.)
 - Picking a package runner (npx, bunx, pnpm dlx, yarn dlx)
 - Adding the server configuration to your client's config file
 
