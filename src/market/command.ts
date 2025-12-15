@@ -167,7 +167,7 @@ export async function marketCommand(args: string[]) {
     const runnerSelection = await p.select({
       message: "Select your preferred package runner:",
       options: runners.map((r) => ({
-        value: runner,
+        value: r,
         label: r.label,
         hint: r.hint,
       })),

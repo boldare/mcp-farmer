@@ -8,6 +8,42 @@ export interface McpClient {
   hint: string;
 }
 
+function getClaudeDesktopPath(): string {
+  switch (process.platform) {
+    case "darwin":
+      return join(
+        homedir(),
+        "Library",
+        "Application Support",
+        "Claude",
+        "claude_desktop_config.json",
+      );
+    case "win32":
+      return join(
+        process.env.APPDATA || "",
+        "Claude",
+        "claude_desktop_config.json",
+      );
+    case "linux":
+      return join(homedir(), ".config", "claude", "config.json");
+    default:
+      throw new Error(`Unsupported platform: ${process.platform}`);
+  }
+}
+
+function getClaudeDesktopHint(): string {
+  switch (process.platform) {
+    case "darwin":
+      return "~/Library/Application Support/Claude/claude_desktop_config.json";
+    case "win32":
+      return "%APPDATA%/Claude/claude_desktop_config.json";
+    case "linux":
+      return "~/.config/claude/config.json";
+    default:
+      return "Claude Desktop config";
+  }
+}
+
 export const mcpClients: McpClient[] = [
   {
     id: "cursor",
@@ -24,14 +60,8 @@ export const mcpClients: McpClient[] = [
   {
     id: "claude-desktop",
     displayName: "Claude Desktop",
-    path: join(
-      homedir(),
-      "Library",
-      "Application Support",
-      "Claude",
-      "claude_desktop_config.json",
-    ),
-    hint: "~/Library/Application Support/Claude/claude_desktop_config.json",
+    path: getClaudeDesktopPath(),
+    hint: getClaudeDesktopHint(),
   },
   {
     id: "claude-code",
