@@ -3,6 +3,8 @@ name: Continuous Integration
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 env:
   HUSKY: 0
@@ -25,5 +27,11 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Format check
+        run: bun run format:check
+
       - name: Test
         run: bun run test
+
+      - name: Build
+        run: bun run build

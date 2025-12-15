@@ -48,6 +48,7 @@
     "test": "bun test",
     "lint": "eslint .",
     "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "prepare": "husky"
   },
   "devDependencies": {
