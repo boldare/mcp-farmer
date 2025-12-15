@@ -84,8 +84,9 @@ async function copyTemplate(
   templateName: string,
   targetPath: string,
   replacements: Record<string, string> = {},
+  force = false,
 ) {
-  if (await fileExists(targetPath)) {
+  if (!force && (await fileExists(targetPath))) {
     return;
   }
 
@@ -105,6 +106,14 @@ const scriptRunners: Record<PackageManager, string> = {
   yarn: "node",
   deno: "deno run",
   bun: "bun",
+};
+
+const packageRunners: Record<PackageManager, string> = {
+  npm: "npx",
+  pnpm: "pnpm dlx",
+  yarn: "yarn dlx",
+  deno: "deno run -A npm:",
+  bun: "bunx",
 };
 
 async function addPackageScripts(
@@ -175,8 +184,8 @@ export async function newCommand(args: string[]) {
           required: true,
         }),
       httpFramework: ({ results }) => {
-        const transports = results.transports as string[];
-        if (!transports.includes("http")) {
+        const transports = results.transports;
+        if (!transports?.includes("http")) {
           return;
         }
         return p.select({
@@ -184,7 +193,7 @@ export async function newCommand(args: string[]) {
           options: [
             { value: "native", label: "Native Node.js HTTP" },
             { value: "hono", label: "Hono" },
-          ],
+          ] as const,
         });
       },
       packageManager: () =>
@@ -196,7 +205,12 @@ export async function newCommand(args: string[]) {
             { value: "yarn", label: "yarn" },
             { value: "deno", label: "deno" },
             { value: "bun", label: "bun" },
-          ],
+          ] as const,
+        }),
+      initGit: () =>
+        p.confirm({
+          message: "Initialize a git repository?",
+          initialValue: true,
         }),
     },
     {
@@ -207,12 +221,12 @@ export async function newCommand(args: string[]) {
     },
   );
 
-  const name = project.name as string;
+  const name = project.name;
   const path = project.path as string;
-  const transports = project.transports as string[];
-  const httpFramework =
-    (project.httpFramework as "native" | "hono") ?? "native";
-  const packageManager = project.packageManager as PackageManager;
+  const transports = project.transports;
+  const httpFramework = project.httpFramework ?? "native";
+  const packageManager = project.packageManager;
+
   const targetDir = join(process.cwd(), path);
 
   const projectExists = await fileExists(join(targetDir, "package.json"));
@@ -250,16 +264,43 @@ export async function newCommand(args: string[]) {
     process.exit(1);
   }
 
+  const runPrefix = packageManager === "npm" ? "npm run" : packageManager;
+  const packageRunner = packageRunners[packageManager];
+
   s.start("Creating project files");
 
   try {
-    const replacements = { name };
     const httpTemplate = httpFramework === "hono" ? "http-hono.ts" : "http.ts";
 
+    const readmeReplacements: Record<string, string> = {
+      name,
+      installCommand:
+        packageManager === "deno"
+          ? "deno install"
+          : `${packageManager} install`,
+      runCommand: transports.includes("http")
+        ? `${runPrefix} http`
+        : `${runPrefix} stdio`,
+      vetHttpCommand: `${packageRunner} mcp-farmer vet http://localhost:3000/mcp`,
+      vetStdioCommand: `${packageRunner} mcp-farmer vet -- ${runPrefix} stdio`,
+      httpFileDoc: transports.includes("http")
+        ? "- `http.ts` - HTTP transport entry point\n"
+        : "",
+      stdioFileDoc: transports.includes("stdio")
+        ? "- `stdio.ts` - stdio transport entry point\n"
+        : "",
+    };
+
     const filesToCopy: Promise<void>[] = [
-      copyTemplate("server.ts", join(targetDir, "server.ts"), replacements),
+      copyTemplate("server.ts", join(targetDir, "server.ts"), { name }),
       copyTemplate("tsconfig.json", join(targetDir, "tsconfig.json")),
       copyTemplate("gitignore", join(targetDir, ".gitignore")),
+      copyTemplate(
+        "README.md",
+        join(targetDir, "README.md"),
+        readmeReplacements,
+        true,
+      ),
     ];
 
     if (transports.includes("stdio")) {
@@ -320,7 +361,21 @@ export async function newCommand(args: string[]) {
     process.exit(1);
   }
 
-  const runPrefix = packageManager === "npm" ? "npm run" : packageManager;
+  if (project.initGit) {
+    s.start("Initializing git repository");
+
+    try {
+      const { exitCode } = await runCommand(["git", "init"], targetDir);
+
+      if (exitCode !== 0) {
+        throw new Error("git init failed");
+      }
+
+      s.stop("Git repository initialized");
+    } catch {
+      s.stop("Skipped git initialization (git not available)");
+    }
+  }
 
   const runCommands: string[] = [];
   if (transports.includes("stdio")) {
