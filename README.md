@@ -1,22 +1,25 @@
 # mcp-farmer
 
 [![npm version](https://badge.fury.io/js/mcp-farmer.svg)](https://www.npmjs.com/package/mcp-farmer)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A CLI tool for scaffolding and analyzing MCP (Model Context Protocol) servers.
 
 ## Installation
 
-### Global Installation
-
-```bash
-npm install -g mcp-farmer
-```
-
 ### Usage with npx (no install)
 
 ```bash
 npx mcp-farmer <command>
+```
+
+```bash
+bunx mcp-farmer <command>
+```
+
+### Global Installation
+
+```bash
+npm install -g mcp-farmer
 ```
 
 ## Commands
@@ -128,3 +131,7 @@ bun run lint
 # Build for npm
 bun run build
 ```
+
+## License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
