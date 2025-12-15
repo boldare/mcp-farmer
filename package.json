@@ -1,16 +1,49 @@
 {
   "name": "mcp-farmer",
   "description": "A CLI tool for scaffolding and analyzing MCP (Model Context Protocol) servers",
-  "module": "cli.ts",
   "version": "0.1.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/boldare/mcp-farmer.git"
   },
+  "homepage": "https://github.com/boldare/mcp-farmer#readme",
+  "bugs": {
+    "url": "https://github.com/boldare/mcp-farmer/issues"
+  },
   "type": "module",
-  "private": true,
   "author": "Boldare",
+  "license": "MIT",
+  "bin": {
+    "mcp-farmer": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "types": "./dist/cli.d.ts",
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.d.ts.map",
+    "dist/**/*.js.map",
+    "dist/src/new/templates/**/*",
+    "!dist/**/*.test.*",
+    "!dist/commitlint.config.*",
+    "!dist/eslint.config.*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cli",
+    "scaffold",
+    "analysis",
+    "developer-tools"
+  ],
   "scripts": {
+    "build": "tsc && cp -r src/new/templates dist/src/new/ && chmod +x dist/cli.js",
+    "prepublishOnly": "bun run build",
     "type-check": "tsc --noEmit",
     "test": "bun test",
     "lint": "eslint .",
@@ -22,14 +55,13 @@
     "@commitlint/config-conventional": "^20.2.0",
     "@eslint/js": "^9.39.1",
     "@types/bun": "latest",
+    "@types/node": "^22.10.2",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "prettier": "3.7.4",
+    "typescript": "^5.7.2",
     "typescript-eslint": "^8.49.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",

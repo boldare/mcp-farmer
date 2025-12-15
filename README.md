@@ -1,11 +1,22 @@
 # mcp-farmer
 
+[![npm version](https://badge.fury.io/js/mcp-farmer.svg)](https://www.npmjs.com/package/mcp-farmer)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A CLI tool for scaffolding and analyzing MCP (Model Context Protocol) servers.
 
 ## Installation
 
+### Global Installation
+
 ```bash
-bun install
+npm install -g mcp-farmer
+```
+
+### Usage with npx (no install)
+
+```bash
+npx mcp-farmer <command>
 ```
 
 ## Commands
@@ -15,7 +26,7 @@ bun install
 Create a new MCP server project interactively.
 
 ```bash
-bun run cli.ts new
+mcp-farmer new
 ```
 
 The command will guide you through:
@@ -37,7 +48,7 @@ The scaffolded project includes:
 Browse and install popular MCP servers to your client configuration. In the future, this will support MCP registries.
 
 ```bash
-bun run cli.ts market
+mcp-farmer market
 ```
 
 The command will guide you through:
@@ -53,10 +64,10 @@ Vet an MCP server by connecting and running quality checks on its exposed tools.
 
 ```bash
 # HTTP mode
-bun run cli.ts vet <url> [options]
+mcp-farmer vet <url> [options]
 
 # Stdio mode
-bun run cli.ts vet [options] -- <command> [args...]
+mcp-farmer vet [options] -- <command> [args...]
 ```
 
 Options:
@@ -70,13 +81,13 @@ Examples:
 
 ```bash
 # HTTP server
-bun run cli.ts vet http://localhost:3000/mcp
+mcp-farmer vet http://localhost:3000/mcp
 
 # Pipe large output to less
-bun run cli.ts vet https://mcp.svelte.dev/mcp | less
+mcp-farmer vet https://mcp.svelte.dev/mcp | less
 
 # Stdio server with HTML report
-bun run cli.ts vet --output html -- bunx @playwright/mcp@latest > report.html
+mcp-farmer vet --output html -- bunx @playwright/mcp@latest > report.html
 ```
 
 Rules:
@@ -89,3 +100,31 @@ Rules:
 - Duplicate tool names
 - Similar tool descriptions
 - Potentially dangerous tool names (e.g., exec, eval, rm, drop)
+
+## Development
+
+For contributors who want to work on mcp-farmer:
+
+```bash
+# Clone the repository
+git clone https://github.com/boldare/mcp-farmer.git
+cd mcp-farmer
+
+# Install dependencies
+bun install
+
+# Run from source
+bun run cli.ts <command>
+
+# Run tests
+bun test
+
+# Type checking
+bun run type-check
+
+# Lint
+bun run lint
+
+# Build for npm
+bun run build
+```

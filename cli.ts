@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { vetCommand } from "./src/vet/command.js";
 import { newCommand } from "./src/new/command.js";
 import { marketCommand } from "./src/market/command.js";

@@ -339,6 +339,6 @@ export async function newCommand(args: string[]) {
     `Your MCP server is ready!\n\n` +
       `  cd ${path}\n\n` +
       runInstructions +
-      `Note: Requires Node.js 22+`,
+      `Note: Requires Node.js 20+`,
   );
 }
