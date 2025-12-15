@@ -10,6 +10,7 @@ import {
   checkDangerousTools,
   checkSimilarDescriptions,
   checkOutputSchema,
+  checkPiiHandling,
   tokenize,
   type Schema,
 } from "./tools.js";
@@ -436,5 +437,104 @@ describe("checkOutputSchema", () => {
     const finding = checkOutputSchema(tool);
 
     expect(finding).toBeNull();
+  });
+});
+
+describe("checkPiiHandling", () => {
+  test.each([
+    ["getUserEmail", "email"],
+    ["updatePhoneNumber", "phone"],
+    ["getAddress", "address"],
+    ["validateSsn", "ssn"],
+    ["storePassword", "password"],
+    ["fetchFirstname", "firstname"],
+    ["processCreditCard", "credit"],
+    ["getPatientData", "patient"],
+    ["updateBirthday", "birthday"],
+    ["getUserLocation", "location"],
+  ])("detects PII in tool name: %s (contains %s)", (toolName, expectedWord) => {
+    const tool = { name: toolName, description: "Test" } as Tool;
+
+    const finding = checkPiiHandling(tool);
+
+    expect(finding).not.toBeNull();
+    expect(finding?.severity).toBe("info");
+    expect(finding?.message).toContain("May handle personal data");
+    expect(finding?.message).toContain(expectedWord);
+  });
+
+  test("detects PII in tool description", () => {
+    const tool = {
+      name: "fetchData",
+      description: "Fetches user email and phone from the database",
+    } as Tool;
+
+    const finding = checkPiiHandling(tool);
+
+    expect(finding).not.toBeNull();
+    expect(finding?.message).toContain("email");
+    expect(finding?.message).toContain("phone");
+  });
+
+  test("detects PII in input property names", () => {
+    const tool = {
+      name: "updateUser",
+      description: "Updates user information",
+      inputSchema: {
+        type: "object",
+        properties: {
+          emailAddress: { type: "string", description: "Email" },
+          phoneNumber: { type: "string", description: "Phone" },
+          userPassword: { type: "string", description: "Password" },
+        },
+      },
+    } as Tool;
+
+    const finding = checkPiiHandling(tool);
+
+    expect(finding).not.toBeNull();
+    expect(finding?.message).toContain("email");
+    expect(finding?.message).toContain("phone");
+    expect(finding?.message).toContain("password");
+  });
+
+  test("returns unique PII matches only", () => {
+    const tool = {
+      name: "emailService",
+      description: "Send email notifications",
+      inputSchema: {
+        type: "object",
+        properties: {
+          email: { type: "string" },
+        },
+      },
+    } as Tool;
+
+    const finding = checkPiiHandling(tool);
+
+    expect(finding).not.toBeNull();
+    const emailCount = (finding?.message.match(/email/g) || []).length;
+    expect(emailCount).toBe(1);
+  });
+
+  test.each([
+    "search",
+    "formatText",
+    "list_files",
+    "calculate-total",
+    "runQuery",
+  ])("returns no finding for safe tool: %s", (toolName) => {
+    const tool = {
+      name: toolName,
+      description: "A safe tool",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string" },
+        },
+      },
+    } as Tool;
+
+    expect(checkPiiHandling(tool)).toBeNull();
   });
 });

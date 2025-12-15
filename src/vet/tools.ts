@@ -129,6 +129,56 @@ const DANGEROUS_WORDS = [
   "delete",
 ] as const;
 
+const PII_WORDS = [
+  // Personal identifiers
+  "email",
+  "phone",
+  "address",
+  "ssn",
+  "passport",
+  "license",
+  // Names
+  "firstname",
+  "lastname",
+  "fullname",
+  "username",
+  // Financial
+  "credit",
+  "card",
+  "bank",
+  // Health
+  "health",
+  "medical",
+  "diagnosis",
+  "patient",
+  // Biometric
+  "fingerprint",
+  "biometric",
+  "face",
+  "retina",
+  // Location
+  "location",
+  "gps",
+  "coordinates",
+  // Authentication
+  "password",
+  "secret",
+  "credential",
+  // Demographics
+  "dob",
+  "birthday",
+  "birthdate",
+  "age",
+  "gender",
+  "race",
+  "ethnicity",
+  // IDs
+  "identifier",
+  "national",
+  "social",
+  "tax",
+] as const;
+
 /**
  * Tokenizes a name into an array of words.
  * @param name camelCase, PascalCase, snake_case, kebab-case, etc.
@@ -175,6 +225,32 @@ export function checkDangerousTools(tool: Tool): Finding | null {
     return {
       severity: "warning",
       message: `Potentially dangerous tool detected (contains "${matched}")`,
+      toolName: tool.name,
+    };
+  }
+
+  return null;
+}
+
+export function checkPiiHandling(tool: Tool): Finding | null {
+  const nameTokens = tokenize(tool.name);
+  const descriptionTokens = tool.description ? tokenize(tool.description) : [];
+
+  const schema = tool.inputSchema as Schema | undefined;
+  const inputNames = Object.keys(schema?.properties ?? {});
+  const inputTokens = inputNames.flatMap(tokenize);
+
+  const allTokens = [...nameTokens, ...descriptionTokens, ...inputTokens];
+
+  const matchedTokens = allTokens.filter((token) =>
+    PII_WORDS.includes(token as (typeof PII_WORDS)[number]),
+  );
+
+  if (matchedTokens.length > 0) {
+    const uniqueMatches = [...new Set(matchedTokens)];
+    return {
+      severity: "info",
+      message: `May handle personal data (contains: ${uniqueMatches.join(", ")})`,
       toolName: tool.name,
     };
   }
@@ -286,6 +362,7 @@ export function runCheckers(tools: Tool[]): Finding[] {
       checkInputCount(tool),
       checkDangerousTools(tool),
       checkOutputSchema(tool as Tool & { outputSchema?: Schema }),
+      checkPiiHandling(tool),
     ])
     .filter((f): f is Finding => f !== null);
 
