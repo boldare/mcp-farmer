@@ -1,8 +1,18 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { vetCommand } from "./src/vet/command.js";
 import { newCommand } from "./src/new/command.js";
 import { marketCommand } from "./src/market/command.js";
 import { tryCommand } from "./src/try/command.js";
+
+function getVersion(): string {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const packageJsonPath = resolve(__dirname, "..", "package.json");
+  const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  return pkg.version;
+}
 
 function printHelp() {
   console.log(`Usage: mcp-farmer <command> [options]
@@ -17,6 +27,7 @@ Commands:
 
 Options:
   --help       Show this help message
+  --version    Show version number
 
 Run 'mcp-farmer <command> --help' for more information on a command.`);
 }
@@ -27,6 +38,11 @@ async function main() {
 
   if (!command || command === "--help" || command === "-h") {
     printHelp();
+    process.exit(0);
+  }
+
+  if (command === "--version" || command === "-v") {
+    console.log(getVersion());
     process.exit(0);
   }
 
