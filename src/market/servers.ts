@@ -33,6 +33,12 @@ export const servers: McpServer[] = [
     url: "https://mcp.figma.com/mcp",
   },
   {
+    name: "GitHub",
+    description:
+      "GitHub integration for repository management and code collaboration",
+    url: "https://api.githubcopilot.com/mcp/",
+  },
+  {
     name: "Grep",
     description: "Code search across repositories",
     url: "https://mcp.grep.app",
@@ -46,6 +52,12 @@ export const servers: McpServer[] = [
     name: "Netlify",
     description: "Netlify integration for web deployment and hosting",
     url: "https://netlify-mcp.netlify.app/mcp",
+  },
+  {
+    name: "Pipedream",
+    description:
+      "Pipedream integration for workflow automation and API integrations",
+    url: "https://mcp.pipedream.net/v2",
   },
   {
     name: "Playwright",
