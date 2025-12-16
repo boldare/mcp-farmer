@@ -9,6 +9,7 @@ import {
   connect,
   connectStdio,
   AuthenticationRequiredError,
+  ConnectionError,
 } from "../shared/mcp.js";
 import { CliOAuthProvider } from "../shared/oauth.js";
 import { consoleReporter } from "./reporters/console.js";
@@ -275,6 +276,10 @@ export async function vetCommand(args: string[]) {
       });
       console.log(output);
       process.exit(1);
+    }
+    if (error instanceof ConnectionError) {
+      console.error(`Error: ${error.message}`);
+      process.exit(2);
     }
     throw error;
   }

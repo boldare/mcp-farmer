@@ -4,7 +4,7 @@ import * as p from "@clack/prompts";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
-import { connect, connectStdio } from "../shared/mcp.js";
+import { connect, connectStdio, ConnectionError } from "../shared/mcp.js";
 import {
   extractToolSchema,
   getPropertyType,
@@ -401,6 +401,6 @@ export async function tryCommand(args: string[]) {
     s.stop("Connection failed");
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Error: ${message}`);
-    process.exit(1);
+    process.exit(error instanceof ConnectionError ? 2 : 1);
   }
 }

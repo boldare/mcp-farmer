@@ -26,6 +26,59 @@ export class AuthenticationRequiredError extends Error {
   }
 }
 
+export class ConnectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionError";
+  }
+}
+
+function isNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+
+  const message = error.message.toLowerCase();
+  const networkIndicators = [
+    "enotfound",
+    "econnrefused",
+    "etimedout",
+    "econnreset",
+    "enetunreach",
+    "fetch failed",
+    "network",
+    "dns",
+    "typo in the url",
+    "unable to connect",
+  ];
+
+  return networkIndicators.some((indicator) => message.includes(indicator));
+}
+
+function getConnectionErrorMessage(error: unknown, url: URL): string {
+  if (!(error instanceof Error)) {
+    return `Failed to connect to ${url.origin}`;
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (message.includes("enotfound") || message.includes("dns")) {
+    return `Could not resolve host: ${url.hostname}`;
+  }
+  if (
+    message.includes("econnrefused") ||
+    message.includes("unable to connect")
+  ) {
+    return `Connection refused: ${url.origin} - is the server running?`;
+  }
+  if (message.includes("etimedout")) {
+    return `Connection timed out: ${url.origin}`;
+  }
+  if (message.includes("typo in the url")) {
+    return `Could not connect to ${url.origin} - check if the URL is correct`;
+  }
+
+  return `Failed to connect to ${url.origin}: ${error.message}`;
+}
+
 function isAuthError(error: unknown): boolean {
   if (error instanceof Error && "code" in error) {
     return (error as { code: number }).code === 401;
@@ -124,6 +177,9 @@ export async function connect(
         details.authHeader,
         details.errorDescription,
       );
+    }
+    if (isNetworkError(error)) {
+      throw new ConnectionError(getConnectionErrorMessage(error, url));
     }
     throw error;
   }
