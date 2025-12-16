@@ -1,6 +1,6 @@
 # mcp-farmer
 
-[![npm version](https://badge.fury.io/js/mcp-farmer.svg)](https://www.npmjs.com/package/mcp-farmer)
+[![npm version](https://badge.fury.io/js/mcp-farmer.svg)](https://badge.fury.io/js/mcp-farmer)
 
 A CLI tool for scaffolding and analyzing MCP (Model Context Protocol) servers.
 
