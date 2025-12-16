@@ -6,6 +6,7 @@ import { vetCommand } from "./src/vet/command.js";
 import { newCommand } from "./src/new/command.js";
 import { marketCommand } from "./src/market/command.js";
 import { tryCommand } from "./src/try/command.js";
+import { growCommand } from "./src/grow/command.js";
 
 function getVersion(): string {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -24,6 +25,7 @@ Commands:
   new          Create a new MCP server project
   market       Browse and install popular MCP servers
   try <url>    Interactively call a tool on an MCP server
+  grow         Generate MCP tools from OpenAPI specifications
 
 Options:
   --help       Show this help message
@@ -60,6 +62,9 @@ async function main() {
       break;
     case "try":
       await tryCommand(subcommandArgs);
+      break;
+    case "grow":
+      await growCommand(subcommandArgs);
       break;
     default:
       console.error(`Unknown command: ${command}\n`);
