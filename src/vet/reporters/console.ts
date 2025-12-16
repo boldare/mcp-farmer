@@ -2,6 +2,7 @@ import type {
   Prompt,
   Resource,
   Tool,
+  ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 
 import type { Finding } from "../tools.js";
@@ -29,9 +30,34 @@ const purple = "\x1b[35m";
 const muted = "\x1b[90m";
 const coral = "\x1b[91m";
 
+const cyan = "\x1b[36m";
+
 const CHECK = `${green}✓${RESET}`;
 const CROSS = `${coral}✗${RESET}`;
 const WARN = `${muted}~${RESET}`;
+
+function formatAnnotations(annotations: ToolAnnotations | undefined): string {
+  if (!annotations) return "";
+
+  const badges: string[] = [];
+
+  if (annotations.readOnlyHint) {
+    badges.push(`${cyan}read-only${RESET}`);
+  }
+  if (annotations.destructiveHint) {
+    badges.push(`${coral}destructive${RESET}`);
+  }
+  if (annotations.idempotentHint) {
+    badges.push(`${green}idempotent${RESET}`);
+  }
+  if (annotations.openWorldHint) {
+    badges.push(`${purple}open-world${RESET}`);
+  }
+
+  return badges.length > 0
+    ? ` ${DIM}[${RESET}${badges.join(`${DIM}, ${RESET}`)}${DIM}]${RESET}`
+    : "";
+}
 
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
@@ -66,8 +92,16 @@ function formatTool(tool: Tool, findings: Finding[]): string {
     (f) => f.message === "Missing tool description" && !f.inputName,
   );
 
-  // Tool name header
-  lines.push(`\n  ${BOLD}${purple}◆ ${tool.name}${RESET}`);
+  const annotationsBadges = formatAnnotations(tool.annotations);
+
+  // Tool name header with annotations
+  const displayName = tool.annotations?.title ?? tool.name;
+  const nameDisplay = tool.annotations?.title
+    ? `${displayName} ${DIM}(${tool.name})${RESET}`
+    : tool.name;
+  lines.push(
+    `\n  ${BOLD}${purple}◆ ${nameDisplay}${RESET}${annotationsBadges}`,
+  );
 
   // Description
   if (tool.description) {

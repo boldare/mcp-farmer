@@ -2,6 +2,7 @@ import type {
   Prompt,
   Resource,
   Tool,
+  ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 
 import type { Finding } from "../tools.js";
@@ -26,10 +27,43 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function renderAnnotationBadges(
+  annotations: ToolAnnotations | undefined,
+): string {
+  if (!annotations) return "";
+
+  const badges: string[] = [];
+
+  if (annotations.readOnlyHint) {
+    badges.push('<span class="badge badge-readonly">read-only</span>');
+  }
+  if (annotations.destructiveHint) {
+    badges.push('<span class="badge badge-destructive">destructive</span>');
+  }
+  if (annotations.idempotentHint) {
+    badges.push('<span class="badge badge-idempotent">idempotent</span>');
+  }
+  if (annotations.openWorldHint) {
+    badges.push('<span class="badge badge-openworld">open-world</span>');
+  }
+
+  return badges.length > 0
+    ? `<span class="badges">${badges.join("")}</span>`
+    : "";
+}
+
 function renderTool(tool: Tool, findings: Finding[]): string {
   const { properties, required, propNames } = extractToolSchema(tool);
   const toolFindings = getToolFindings(findings, tool.name);
   const hasIssues = toolFindings.length > 0;
+
+  const badgesHtml = renderAnnotationBadges(tool.annotations);
+
+  // Display name (use title if available, otherwise tool.name)
+  const displayName = tool.annotations?.title ?? tool.name;
+  const nameHtml = tool.annotations?.title
+    ? `<code>${escapeHtml(displayName)}</code> <span class="tool-id">(${escapeHtml(tool.name)})</span>`
+    : `<code>${escapeHtml(tool.name)}</code>`;
 
   let inputsHtml = "";
   if (propNames.length === 0) {
@@ -101,7 +135,7 @@ function renderTool(tool: Tool, findings: Finding[]): string {
 
   return `
     <section class="tool${hasIssues ? " has-issues" : ""}">
-      <h3><code>${escapeHtml(tool.name)}</code></h3>
+      <h3>${nameHtml}${badgesHtml}</h3>
       <p class="tool-desc">${tool.description ? escapeHtml(tool.description) : "<em>No description</em>"}</p>
       ${inputsHtml}
       ${outputsHtml}
@@ -270,8 +304,21 @@ h2 {
 }
 .tool:last-child { border-bottom: none; padding-bottom: 0; }
 .tool.has-issues { border-left: 2px solid var(--warn); padding-left: 1rem; margin-left: -1rem; }
-.tool h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.375rem; }
+.tool h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.375rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .tool h3 code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; background: none; }
+.tool-id { font-size: 0.75rem; color: var(--fg3); font-weight: 400; }
+.badges { display: inline-flex; gap: 0.25rem; }
+.badge { font-size: 0.65rem; font-weight: 500; padding: 0.1rem 0.4rem; border-radius: 3px; text-transform: lowercase; }
+.badge-readonly { background: #dbeafe; color: #1e40af; }
+.badge-destructive { background: #fee2e2; color: #991b1b; }
+.badge-idempotent { background: #dcfce7; color: #166534; }
+.badge-openworld { background: #f3e8ff; color: #6b21a8; }
+@media (prefers-color-scheme: dark) {
+  .badge-readonly { background: #1e3a5f; color: #93c5fd; }
+  .badge-destructive { background: #450a0a; color: #fca5a5; }
+  .badge-idempotent { background: #14532d; color: #86efac; }
+  .badge-openworld { background: #3b0764; color: #d8b4fe; }
+}
 .tool-desc {
   color: var(--fg2);
   font-size: 0.85rem;
