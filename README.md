@@ -4,156 +4,76 @@
 
 A CLI tool for scaffolding and analyzing MCP (Model Context Protocol) servers.
 
-## Installation
+```
+Usage: mcp-farmer <command> [options]
 
-### Usage with npx (no install)
+Commands:
+  vet <url>    Vet an MCP server by connecting and running checks
+  new          Create a new MCP server project
+  market       Browse and install popular MCP servers
+  try <url>    Interactively call a tool on an MCP server
+
+Options:
+  --help       Show this help message
+```
+
+## Quick Start
 
 ```bash
 npx mcp-farmer <command>
-```
-
-```bash
+# or
 bunx mcp-farmer <command>
-```
-
-### Global Installation
-
-```bash
-npm install -g mcp-farmer
 ```
 
 ## Commands
 
-### new
-
-Create a new MCP server project interactively.
+### `new` — Scaffold a new MCP server
 
 ```bash
 mcp-farmer new
 ```
 
-The command will guide you through:
+Interactively creates a TypeScript MCP server with HTTP/stdio transports, your choice of framework (Node.js HTTP or Hono), and package manager.
 
-- Server name and directory path
-- Language selection (TypeScript)
-- HTTP framework choice (Native Node.js HTTP or Hono)
-- Package manager selection (npm, pnpm, yarn, deno, bun)
-
-The scaffolded project includes:
-
-- Basic MCP server implementation with example tool
-- HTTP and stdio transport entry points
-- TypeScript configuration
-- Run scripts for both transports
-
-### market
-
-Browse and install popular MCP servers to your client configuration. In the future, this will support MCP registries.
+### `market` — Install popular MCP servers
 
 ```bash
 mcp-farmer market
 ```
 
-The command will guide you through:
+Browse curated MCP servers and add them to your client config (Claude Code, Claude Desktop, Cursor, VS Code, etc.).
 
-- Selecting an MCP server from the curated list
-- Choosing your MCP client (Claude Code, Claude Desktop, Cursor, VS Code, Open Code, etc.)
-- Picking a package runner (npx, bunx, pnpm dlx, yarn dlx)
-- Adding the server configuration to your client's config file
-
-### try
-
-Interactively call a tool on an MCP server.
+### `try` — Call tools interactively
 
 ```bash
-# HTTP mode
-mcp-farmer try <url>
-
-# Stdio mode
-mcp-farmer try -- <command> [args...]
+mcp-farmer try http://localhost:3000/mcp              # HTTP
+mcp-farmer try -- npx -y @modelcontextprotocol/server-memory  # Stdio
 ```
 
-Examples:
+### `vet` — Audit MCP server quality
 
 ```bash
-# HTTP server
-mcp-farmer try http://localhost:3000/mcp
-
-# Stdio server
-mcp-farmer try -- npx -y @modelcontextprotocol/server-memory
+mcp-farmer vet http://localhost:3000/mcp              # HTTP
+mcp-farmer vet -- bunx @playwright/mcp@latest         # Stdio
+mcp-farmer vet -o html -- bunx @playwright/mcp > report.html
 ```
 
-### vet
+**Options:** `-o, --output json|html`, `--oauth`, `--oauth-port <port>`
 
-Vet an MCP server by connecting and running quality checks on its exposed tools.
-
-```bash
-# HTTP mode
-mcp-farmer vet <url> [options]
-
-# Stdio mode
-mcp-farmer vet [options] -- <command> [args...]
-```
-
-Options:
-
-- `-o, --output json|html` - Output format (json or html)
-- `--oauth` - Enable OAuth authentication flow (HTTP mode only)
-- `--oauth-port <port>` - Port for OAuth callback server (default: 9876)
-- `-h, --help` - Show help message
-
-Examples:
-
-```bash
-# HTTP server
-mcp-farmer vet http://localhost:3000/mcp
-
-# Pipe large output to less
-mcp-farmer vet https://mcp.svelte.dev/mcp | less
-
-# Stdio server with HTML report
-mcp-farmer vet --output html -- bunx @playwright/mcp@latest > report.html
-```
-
-Rules:
-
-- Missing tool description
-- Missing input description
-- Missing output schema
-- Too many required inputs (more than 5)
-- Too many tools exposed (more than 30)
-- Duplicate tool names
-- Similar tool descriptions
-- Potentially dangerous tool names (e.g., exec, eval, rm, drop)
+**Checks:** missing descriptions, missing schemas, too many inputs (>5), too many tools (>30), duplicates, similar descriptions, dangerous tool names.
 
 ## Development
 
-For contributors who want to work on mcp-farmer:
-
 ```bash
-# Clone the repository
-git clone https://github.com/boldare/mcp-farmer.git
-cd mcp-farmer
-
-# Install dependencies
+git clone https://github.com/boldare/mcp-farmer.git && cd mcp-farmer
 bun install
-
-# Run from source
-bun run cli.ts <command>
-
-# Run tests
-bun test
-
-# Type checking
-bun run type-check
-
-# Lint
-bun run lint
-
-# Build for npm
-bun run build
+bun run cli.ts <command>   # Run from source
+bun test                   # Tests
+bun run type-check         # Type checking
+bun run lint               # Lint
+bun run build              # Build for npm
 ```
 
 ## License
 
-Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
+MIT — see [LICENSE](LICENSE)
