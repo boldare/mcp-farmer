@@ -12,8 +12,8 @@ import {
   checkOutputSchema,
   checkPiiHandling,
   tokenize,
-  type Schema,
 } from "./tools.js";
+import type { Schema } from "../shared/schema.js";
 
 describe("checkToolDescriptions", () => {
   test("returns warning when tool has no description", () => {

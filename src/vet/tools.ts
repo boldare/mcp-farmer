@@ -1,24 +1,12 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 
+import type { Schema } from "../shared/schema.js";
+
 export interface Finding {
   severity: "error" | "warning" | "info";
   message: string;
   toolName?: string;
   inputName?: string;
-}
-
-export interface SchemaProperty {
-  type?: string | string[];
-  description?: string;
-  anyOf?: { type: string; items?: { type: string } }[];
-  items?: { type: string };
-  additionalProperties?: { type: string };
-}
-
-export interface Schema {
-  type?: string;
-  properties?: Record<string, SchemaProperty>;
-  required?: string[];
 }
 
 export function checkToolDescriptions(tool: Tool): Finding | null {

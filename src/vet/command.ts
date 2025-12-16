@@ -5,8 +5,12 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 import { runCheckers } from "./tools.js";
 import { checkHealth } from "./health.js";
-import { connect, connectStdio, AuthenticationRequiredError } from "./mcp.js";
-import { CliOAuthProvider } from "./oauth.js";
+import {
+  connect,
+  connectStdio,
+  AuthenticationRequiredError,
+} from "../shared/mcp.js";
+import { CliOAuthProvider } from "../shared/oauth.js";
 import { consoleReporter } from "./reporters/console.js";
 import { jsonReporter } from "./reporters/json.js";
 import { htmlReporter } from "./reporters/html.js";

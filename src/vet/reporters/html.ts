@@ -4,16 +4,19 @@ import type {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import type { Finding, Schema } from "../tools.js";
+import type { Finding } from "../tools.js";
 import type { HealthCheckResult } from "../health.js";
 import {
   type Reporter,
   type ReportData,
-  formatType,
   getToolFindings,
-  extractToolSchema,
   computeStats,
 } from "./shared.js";
+import {
+  type Schema,
+  extractToolSchema,
+  formatType,
+} from "../../shared/schema.js";
 
 function escapeHtml(str: string): string {
   return str

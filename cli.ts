@@ -2,6 +2,7 @@
 import { vetCommand } from "./src/vet/command.js";
 import { newCommand } from "./src/new/command.js";
 import { marketCommand } from "./src/market/command.js";
+import { tryCommand } from "./src/try/command.js";
 
 function printHelp() {
   console.log(`Usage: mcp-farmer <command> [options]
@@ -12,6 +13,7 @@ Commands:
   vet <url>    Vet an MCP server by connecting and running checks
   new          Create a new MCP server project
   market       Browse and install popular MCP servers
+  try <url>    Interactively call a tool on an MCP server
 
 Options:
   --help       Show this help message
@@ -39,6 +41,9 @@ async function main() {
       break;
     case "market":
       await marketCommand(subcommandArgs);
+      break;
+    case "try":
+      await tryCommand(subcommandArgs);
       break;
     default:
       console.error(`Unknown command: ${command}\n`);

@@ -4,17 +4,20 @@ import type {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import type { Finding, Schema } from "../tools.js";
+import type { Finding } from "../tools.js";
 import type { HealthCheckResult } from "../health.js";
 import {
   type Reporter,
   type ReportData,
-  formatType,
   getToolFindings,
-  extractToolSchema,
   computeStats,
   groupFindingsBySeverity,
 } from "./shared.js";
+import {
+  type Schema,
+  extractToolSchema,
+  formatType,
+} from "../../shared/schema.js";
 
 // Styling constants
 const RESET = "\x1b[0m";

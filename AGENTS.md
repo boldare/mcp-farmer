@@ -31,18 +31,21 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 ## File Structure
 
 - `cli.ts` - Entry point. Parses CLI args and dispatches to subcommands
+- `src/shared/` - Shared utilities used across commands
+  - `mcp.ts` - MCP client connection logic. Tries StreamableHTTP transport first, falls back to SSE
+  - `oauth.ts` - OAuth authentication provider for MCP servers requiring auth
 - `src/vet/` - Vet command: connects to MCP servers and runs quality checks on exposed tools
   - `command.ts` - Vet command logic: parses args, orchestrates MCP connection, runs checks, outputs results
-  - `mcp.ts` - MCP client connection logic. Tries StreamableHTTP transport first, falls back to SSE
   - `tools.ts` - Tool analysis checkers: validates descriptions, input/output schemas, input counts, and detects duplicate tool names
   - `health.ts` - Health endpoint checker (`/health` route)
-  - `oauth.ts` - OAuth authentication provider for MCP servers requiring auth
   - `reporters/` - Output formatters for vet results
     - `console.ts` - Terminal output formatting with ANSI colors. Prints tool details, findings, and summary
     - `html.ts` - HTML report generator with styled output
     - `json.ts` - JSON output formatter
     - `shared.ts` - Shared types and utilities for reporters
   - `tools.test.ts` - Unit tests for tool checkers
+- `src/try/` - Try command: interactively call tools on an MCP server
+  - `command.ts` - Try command logic: connects to server, lists tools, prompts for input, calls tool
 - `src/new/` - New command: scaffolds a new MCP server project
   - `command.ts` - New command logic: interactive prompts, project initialization, dependency installation
   - `templates/` - Template files copied to new projects
@@ -82,3 +85,12 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 5. Builds server configuration (either package-based with command/args or URL-based with url/type)
 6. Prompts for confirmation and saves configuration to the selected client's config file
 7. Displays configuration file path and restart instructions
+
+## Try Command Flow
+
+1. CLI dispatches to `tryCommand()` with args
+2. Connects to MCP server via `connect()` (HTTP) or `connectStdio()` (stdio)
+3. Lists available tools from the server
+4. Prompts user to select a tool
+5. Prompts for input values based on the tool's input schema
+6. Calls the selected tool and displays the result

@@ -57,9 +57,31 @@ mcp-farmer market
 The command will guide you through:
 
 - Selecting an MCP server from the curated list
-- Choosing your MCP client (Claude Code, Claude Desktop, Cursor, VS Code, OpenCode, etc.)
+- Choosing your MCP client (Claude Code, Claude Desktop, Cursor, VS Code, Open Code, etc.)
 - Picking a package runner (npx, bunx, pnpm dlx, yarn dlx)
 - Adding the server configuration to your client's config file
+
+### try
+
+Interactively call a tool on an MCP server.
+
+```bash
+# HTTP mode
+mcp-farmer try <url>
+
+# Stdio mode
+mcp-farmer try -- <command> [args...]
+```
+
+Examples:
+
+```bash
+# HTTP server
+mcp-farmer try http://localhost:3000/mcp
+
+# Stdio server
+mcp-farmer try -- npx -y @modelcontextprotocol/server-memory
+```
 
 ### vet
 
