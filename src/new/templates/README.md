@@ -27,9 +27,9 @@ Vet your server with mcp-farmer:
 ## Project Structure
 
 - `server.ts` - MCP server definition with tools
-  {{httpFileDoc}}{{stdioFileDoc}}
+{{httpFileDoc}}{{stdioFileDoc}}{{dockerFileDoc}}
 
-## Learn More
+{{dockerSection}}## Learn More
 
 - [MCP Documentation](https://modelcontextprotocol.io)
 - [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)

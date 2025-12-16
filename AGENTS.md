@@ -55,6 +55,8 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
     - `http-hono.ts` - HTTP transport entry point using Hono framework
     - `tsconfig.json` - TypeScript config template
     - `gitignore` - Git ignore file template
+    - `Dockerfile` - Docker container configuration (optional release option)
+    - `dockerignore` - Docker ignore file template
 - `src/market/` - Market command: browse and install popular MCP servers
   - `command.ts` - Market command logic: interactive prompts for selecting servers and clients, writes config to MCP client files
   - `servers.ts` - Curated list of popular MCP servers (Chrome DevTools, Playwright, Atlassian, Linear, Context7, Figma)
@@ -72,9 +74,10 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 
 1. CLI dispatches to `newCommand()` with args
 2. Prompts user for server name, directory path, language, and package manager
-3. Creates project directory and initializes with selected package manager
-4. Copies template files with name substitutions
-5. Installs dependencies (@modelcontextprotocol/sdk, zod) and dev dependencies (typescript, @types/node)
+3. For HTTP transport, optionally prompts for release options (Dockerfile)
+4. Creates project directory and initializes with selected package manager
+5. Copies template files with name substitutions (includes Docker files if selected)
+6. Installs dependencies (@modelcontextprotocol/sdk, zod) and dev dependencies (typescript, @types/node)
 
 ## Market Command Flow
 

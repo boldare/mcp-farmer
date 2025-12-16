@@ -120,6 +120,7 @@ async function addPackageScripts(
   packageJsonPath: string,
   packageManager: PackageManager,
   transports: string[],
+  releaseOptions: string[],
 ) {
   const content = await readFile(packageJsonPath, "utf-8");
   const pkg = JSON.parse(content);
@@ -132,6 +133,10 @@ async function addPackageScripts(
   }
   if (transports.includes("stdio")) {
     scripts.stdio = `${runner} stdio.ts`;
+  }
+
+  if (releaseOptions.includes("docker")) {
+    scripts.build = "tsc";
   }
 
   pkg.scripts = {
@@ -212,6 +217,16 @@ export async function newCommand(args: string[]) {
           message: "Initialize a git repository?",
           initialValue: true,
         }),
+      releaseOptions: ({ results }) => {
+        if (!results.transports?.includes("http")) {
+          return;
+        }
+        return p.multiselect({
+          message: "Release options (optional):",
+          options: [{ value: "docker", label: "Dockerfile" }],
+          required: false,
+        });
+      },
     },
     {
       onCancel: () => {
@@ -226,6 +241,7 @@ export async function newCommand(args: string[]) {
   const transports = project.transports;
   const httpFramework = project.httpFramework ?? "native";
   const packageManager = project.packageManager;
+  const releaseOptions = (project.releaseOptions ?? []) as string[];
 
   const targetDir = join(process.cwd(), path);
 
@@ -255,6 +271,7 @@ export async function newCommand(args: string[]) {
       join(targetDir, "package.json"),
       packageManager,
       transports,
+      releaseOptions,
     );
 
     s.stop("Project initialized");
@@ -289,6 +306,22 @@ export async function newCommand(args: string[]) {
       stdioFileDoc: transports.includes("stdio")
         ? "- `stdio.ts` - stdio transport entry point\n"
         : "",
+      dockerFileDoc: releaseOptions.includes("docker")
+        ? "- `Dockerfile` - Docker container configuration\n"
+        : "",
+      dockerSection: releaseOptions.includes("docker")
+        ? `## Docker
+
+\`\`\`bash
+# Build Docker image
+docker build -t ${name} .
+
+# Run Docker container
+docker run -p 3000:3000 ${name}
+\`\`\`
+
+`
+        : "",
     };
 
     const filesToCopy: Promise<void>[] = [
@@ -309,6 +342,13 @@ export async function newCommand(args: string[]) {
 
     if (transports.includes("http")) {
       filesToCopy.push(copyTemplate(httpTemplate, join(targetDir, "http.ts")));
+    }
+
+    if (releaseOptions.includes("docker")) {
+      filesToCopy.push(
+        copyTemplate("Dockerfile", join(targetDir, "Dockerfile")),
+        copyTemplate("dockerignore", join(targetDir, ".dockerignore")),
+      );
     }
 
     await Promise.all(filesToCopy);
