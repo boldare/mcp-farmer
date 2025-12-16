@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/boldare/mcp-farmer/compare/v1.0.0...v1.1.0) (2025-12-16)
+
+
+### Features
+
+* add dockerfile output option to new command ([ec44fee](https://github.com/boldare/mcp-farmer/commit/ec44feeefea37c2d5470dd97ed306b574641f7d0))
+* display annotations in vet command ([1dd4754](https://github.com/boldare/mcp-farmer/commit/1dd4754f994ff56bb7c92c101f4b2e2167f2ead0))
+
 ## 1.0.0 (2025-12-16)
 
 
