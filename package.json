@@ -21,8 +21,6 @@
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
-    "dist/**/*.d.ts.map",
-    "dist/**/*.js.map",
     "dist/src/new/templates/**/*",
     "!dist/**/*.test.*",
     "!dist/commitlint.config.*",
