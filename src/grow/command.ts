@@ -3,6 +3,7 @@ import * as p from "@clack/prompts";
 import {
   fetchOpenApiSpec,
   extractEndpoints,
+  getSpecVersion,
   type OpenAPIOperation,
   type OpenAPISpec,
   type ResponseField,
@@ -91,14 +92,13 @@ export async function growCommand(args: string[]) {
     process.exit(1);
   }
 
-  if (!spec.openapi && !spec.swagger) {
+  const specVersion = getSpecVersion(spec);
+  if (!specVersion) {
     p.log.error(
       "Invalid OpenAPI document: missing 'openapi' or 'swagger' field",
     );
     process.exit(1);
   }
-
-  const specVersion = spec.openapi || spec.swagger;
   const specTitle = spec.info?.title || "Unknown API";
   p.log.info(`Loaded: ${specTitle} (OpenAPI ${specVersion})`);
 

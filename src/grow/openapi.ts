@@ -1,5 +1,4 @@
-import { readFile } from "node:fs/promises";
-import { parse as parseYaml } from "yaml";
+import SwaggerParser from "@apidevtools/swagger-parser";
 
 export interface ResponseField {
   name: string;
@@ -25,56 +24,8 @@ export interface OpenAPIOperation {
   responses?: ResponseSchema[];
 }
 
-interface OpenAPISchemaObject {
-  type?: string;
-  properties?: Record<
-    string,
-    {
-      type?: string;
-      description?: string;
-      $ref?: string;
-      items?: { type?: string; $ref?: string };
-    }
-  >;
-  required?: string[];
-  $ref?: string;
-  items?: { type?: string; $ref?: string };
-}
-
-interface OpenAPIResponseObject {
-  description?: string;
-  content?: Record<
-    string,
-    {
-      schema?: OpenAPISchemaObject;
-    }
-  >;
-  schema?: OpenAPISchemaObject; // Swagger 2.0
-}
-
-export interface OpenAPISpec {
-  openapi?: string;
-  swagger?: string;
-  info?: { title?: string; version?: string };
-  paths?: Record<
-    string,
-    Record<
-      string,
-      {
-        operationId?: string;
-        summary?: string;
-        description?: string;
-        parameters?: unknown[];
-        requestBody?: unknown;
-        responses?: Record<string, OpenAPIResponseObject>;
-      }
-    >
-  >;
-  definitions?: Record<string, OpenAPISchemaObject>; // Swagger 2.0
-  components?: {
-    schemas?: Record<string, OpenAPISchemaObject>;
-  };
-}
+// Infer the spec type from SwaggerParser's return type
+export type OpenAPISpec = Awaited<ReturnType<typeof SwaggerParser.validate>>;
 
 const HTTP_METHODS = [
   "get",
@@ -88,39 +39,27 @@ const HTTP_METHODS = [
 
 const SUCCESS_STATUS_CODES = ["200", "201", "202", "204"];
 
-function resolveRef(
-  ref: string,
-  spec: OpenAPISpec,
-): OpenAPISchemaObject | undefined {
-  // Handle refs like "#/definitions/Pet" (Swagger 2.0) or "#/components/schemas/Pet" (OpenAPI 3.x)
-  const parts = ref.replace(/^#\//, "").split("/");
+interface SchemaObject {
+  type?: string | string[];
+  properties?: Record<string, unknown>;
+  required?: string[];
+  items?: unknown;
+  description?: string;
+}
 
-  if (parts[0] === "definitions" && parts[1]) {
-    return spec.definitions?.[parts[1]];
-  }
-  if (parts[0] === "components" && parts[1] === "schemas" && parts[2]) {
-    return spec.components?.schemas?.[parts[2]];
-  }
-  return undefined;
+function isSchemaObject(schema: unknown): schema is SchemaObject {
+  return typeof schema === "object" && schema !== null && !("$ref" in schema);
 }
 
 function extractFieldsFromSchema(
-  schema: OpenAPISchemaObject | undefined,
-  spec: OpenAPISpec,
+  schema: SchemaObject | undefined,
 ): ResponseField[] {
   if (!schema) return [];
 
-  // Resolve $ref if present
-  if (schema.$ref) {
-    const resolved = resolveRef(schema.$ref, spec);
-    return extractFieldsFromSchema(resolved, spec);
-  }
-
   // Handle array types - extract fields from items
   if (schema.type === "array" && schema.items) {
-    if (schema.items.$ref) {
-      const resolved = resolveRef(schema.items.$ref, spec);
-      return extractFieldsFromSchema(resolved, spec);
+    if (isSchemaObject(schema.items)) {
+      return extractFieldsFromSchema(schema.items);
     }
     return [];
   }
@@ -128,16 +67,19 @@ function extractFieldsFromSchema(
   // Extract properties from object schemas
   if (!schema.properties) return [];
 
-  const requiredFields = new Set(schema.required || []);
+  const requiredFields = new Set(schema.required ?? []);
   const fields: ResponseField[] = [];
 
   for (const [name, prop] of Object.entries(schema.properties)) {
-    let type = prop.type || "unknown";
-    if (prop.$ref) {
-      type = "object";
+    if (!isSchemaObject(prop)) continue;
+
+    let type = "unknown";
+    if (prop.type) {
+      type = Array.isArray(prop.type) ? prop.type.join(" | ") : prop.type;
     }
     if (prop.items) {
-      type = `array<${prop.items.type || "object"}>`;
+      const itemType = isSchemaObject(prop.items) ? prop.items.type : undefined;
+      type = `array<${itemType || "object"}>`;
     }
 
     fields.push({
@@ -151,9 +93,18 @@ function extractFieldsFromSchema(
   return fields;
 }
 
+interface ResponseObject {
+  description?: string;
+  content?: Record<string, { schema?: unknown }>;
+  schema?: unknown; // Swagger 2.0
+}
+
+function isResponseObject(obj: unknown): obj is ResponseObject {
+  return typeof obj === "object" && obj !== null;
+}
+
 function extractResponseSchemas(
-  responses: Record<string, OpenAPIResponseObject> | undefined,
-  spec: OpenAPISpec,
+  responses: Record<string, unknown> | undefined,
 ): ResponseSchema[] {
   if (!responses) return [];
 
@@ -161,22 +112,24 @@ function extractResponseSchemas(
 
   for (const statusCode of SUCCESS_STATUS_CODES) {
     const response = responses[statusCode];
-    if (!response) continue;
+    if (!isResponseObject(response)) continue;
 
-    let schema: OpenAPISchemaObject | undefined;
+    let schema: SchemaObject | undefined;
 
     // OpenAPI 3.x: response.content["application/json"].schema
     if (response.content) {
       const jsonContent =
         response.content["application/json"] || response.content["*/*"];
-      schema = jsonContent?.schema;
+      if (jsonContent?.schema && isSchemaObject(jsonContent.schema)) {
+        schema = jsonContent.schema;
+      }
     }
     // Swagger 2.0: response.schema directly
-    else if (response.schema) {
+    else if (response.schema && isSchemaObject(response.schema)) {
       schema = response.schema;
     }
 
-    const fields = extractFieldsFromSchema(schema, spec);
+    const fields = extractFieldsFromSchema(schema);
 
     if (fields.length > 0) {
       schemas.push({
@@ -190,55 +143,39 @@ function extractResponseSchemas(
   return schemas;
 }
 
-function isUrl(input: string): boolean {
-  return input.startsWith("http://") || input.startsWith("https://");
-}
-
 export async function fetchOpenApiSpec(
   pathOrUrl: string,
 ): Promise<OpenAPISpec> {
-  let content: string;
+  // SwaggerParser.validate parses, dereferences $refs, and validates the spec
+  return await SwaggerParser.validate(pathOrUrl);
+}
 
-  if (isUrl(pathOrUrl)) {
-    const response = await fetch(pathOrUrl, {
-      headers: { Accept: "application/json, application/yaml, text/yaml" },
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch: ${response.status} ${response.statusText}`,
-      );
-    }
-    content = await response.text();
-  } else {
-    content = await readFile(pathOrUrl, "utf-8");
+export function getSpecVersion(spec: OpenAPISpec): string | undefined {
+  if ("openapi" in spec) {
+    return spec.openapi;
   }
-
-  try {
-    return JSON.parse(content) as OpenAPISpec;
-  } catch {
-    // Try YAML
+  if ("swagger" in spec) {
+    return spec.swagger;
   }
-
-  try {
-    return parseYaml(content) as OpenAPISpec;
-  } catch {
-    throw new Error("Failed to parse document as JSON or YAML");
-  }
+  return undefined;
 }
 
 export function extractEndpoints(spec: OpenAPISpec): OpenAPIOperation[] {
   const endpoints: OpenAPIOperation[] = [];
 
-  if (!spec.paths) {
+  if (!("paths" in spec) || !spec.paths) {
     return endpoints;
   }
 
   for (const [path, pathItem] of Object.entries(spec.paths)) {
+    if (!pathItem) continue;
+
     for (const method of HTTP_METHODS) {
       const operation = pathItem[method];
-      if (operation) {
-        const responses = extractResponseSchemas(operation.responses, spec);
+      if (operation && typeof operation === "object") {
+        const responses = extractResponseSchemas(
+          operation.responses as Record<string, unknown>,
+        );
 
         endpoints.push({
           method: method.toUpperCase(),
@@ -246,8 +183,9 @@ export function extractEndpoints(spec: OpenAPISpec): OpenAPIOperation[] {
           operationId: operation.operationId,
           summary: operation.summary,
           description: operation.description,
-          parameters: operation.parameters,
-          requestBody: operation.requestBody,
+          parameters: operation.parameters as unknown[],
+          requestBody:
+            "requestBody" in operation ? operation.requestBody : undefined,
           responses: responses.length > 0 ? responses : undefined,
         });
       }
