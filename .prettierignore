@@ -1,3 +1,6 @@
 # Ignore artifacts:
 build
 coverage
+
+# Change log (auto-generated)
+CHANGELOG.md
