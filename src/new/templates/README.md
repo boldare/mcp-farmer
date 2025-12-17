@@ -28,7 +28,7 @@ Vet your server with mcp-farmer:
 
 - `src/` - Source code directory
   - `server.ts` - MCP server definition with tools
-{{httpFileDoc}}{{stdioFileDoc}}{{dockerFileDoc}}
+    {{httpFileDoc}}{{stdioFileDoc}}{{dockerFileDoc}}
 
 {{dockerSection}}## Learn More
 

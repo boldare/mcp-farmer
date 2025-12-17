@@ -67,4 +67,3 @@ const httpServer = createHttpServer(async (req, res) => {
 httpServer.listen(PORT, () => {
   console.log(`MCP server listening on http://localhost:${PORT}/mcp`);
 });
-
