@@ -14,20 +14,6 @@ import {
   type ResponseField,
 } from "./openapi.js";
 
-// ANSI color codes
-const c = {
-  reset: "\x1b[0m",
-  dim: "\x1b[2m",
-  bold: "\x1b[1m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  blue: "\x1b[34m",
-  magenta: "\x1b[35m",
-  cyan: "\x1b[36m",
-  red: "\x1b[31m",
-  gray: "\x1b[90m",
-};
-
 function shortPath(filePath: string): string {
   const cwd = process.cwd();
   if (filePath.startsWith(cwd)) {
@@ -38,23 +24,47 @@ function shortPath(filePath: string): string {
 
 function formatDiff(additions: number, deletions: number): string {
   const parts: string[] = [];
-  if (additions > 0) parts.push(`${c.green}+${additions}${c.reset}`);
-  if (deletions > 0) parts.push(`${c.red}-${deletions}${c.reset}`);
+  if (additions > 0) parts.push(`+${additions}`);
+  if (deletions > 0) parts.push(`-${deletions}`);
   return parts.length > 0 ? ` (${parts.join(" ")})` : "";
 }
 
+interface ActiveTaskLog {
+  log: ReturnType<typeof p.taskLog>;
+  startTime: number;
+}
+
+interface ToolCallUpdate {
+  kind?: string;
+  title?: string;
+}
+
+function getToolDisplayTitle(update: ToolCallUpdate): string {
+  const kind = update.kind?.toString() || "other";
+  const title = update.title?.toLowerCase() || "";
+
+  switch (kind) {
+    case "edit":
+      return "Writing file...";
+    case "read":
+      return title === "list" ? "Listing directory..." : "Reading file...";
+    default:
+      return update.title || "Running...";
+  }
+}
+
 class CodingClient implements acp.Client {
-  private pendingTools = new Map<
-    string,
-    { kind: string; title: string; startTime: number }
-  >();
+  private activeTaskLogs = new Map<string, ActiveTaskLog>();
+  private suppressedToolCalls = new Set<string>();
   private lastPlanHash = "";
 
   async requestPermission(
     params: acp.RequestPermissionRequest,
   ): Promise<acp.RequestPermissionResponse> {
+    p.log.step(`🔐 Permission requested: ${params.toolCall.title}`);
+
     const response = await p.select({
-      message: "Select an option:",
+      message: "Select an action:",
       options: params.options.map((option) => ({
         value: option.optionId,
         label: option.name,
@@ -97,8 +107,6 @@ class CodingClient implements acp.Client {
   }
 
   async sessionUpdate({ update }: acp.SessionNotification): Promise<void> {
-    const u = update as Record<string, unknown>;
-
     switch (update.sessionUpdate) {
       case "agent_message_chunk":
         if (update.content.type === "text" && update.content.text.trim()) {
@@ -108,61 +116,71 @@ class CodingClient implements acp.Client {
 
       case "agent_thought_chunk":
         if (update.content.type === "text" && update.content.text.trim()) {
-          process.stdout.write(`${c.gray}${update.content.text}${c.reset}`);
+          // Use stream for thought chunks with dim styling
+          process.stdout.write(`\x1b[2m${update.content.text}\x1b[0m`);
         }
         break;
 
       case "tool_call": {
-        const toolCallId = u.toolCallId as string;
-        const kind = (u.kind as string) || "other";
-        const title = (u.title as string) || "";
+        const toolCallId = update.toolCallId;
+        const title = update.title?.toLowerCase() || "";
 
-        this.pendingTools.set(toolCallId, {
-          kind,
-          title,
+        // Skip task logs for internal meta-operations
+        if (title === "todowrite") {
+          this.suppressedToolCalls.add(toolCallId);
+          break;
+        }
+
+        const displayTitle = getToolDisplayTitle(update);
+        const log = p.taskLog({
+          title: displayTitle,
+          limit: 5,
+        });
+
+        this.activeTaskLogs.set(toolCallId, {
+          log,
           startTime: Date.now(),
         });
         break;
       }
 
       case "tool_call_update": {
-        const toolCallId = u.toolCallId as string;
-        const status = u.status as string;
-        const kind = (u.kind as string) || "other";
-        const title = (u.title as string) || "";
-        const locations = (u.locations as { path: string }[]) || [];
-        const rawOutput = u.rawOutput as Record<string, unknown> | undefined;
+        const toolCallId = update.toolCallId;
+        const status = update.status;
+        const kind = update.kind?.toString() || "other";
+        const title = update.title || "";
+        const locations = update.locations || [];
+
+        // Skip updates for suppressed tool calls
+        if (this.suppressedToolCalls.has(toolCallId)) {
+          if (status === "completed" || status === "failed") {
+            this.suppressedToolCalls.delete(toolCallId);
+          }
+          break;
+        }
+
+        const activeTask = this.activeTaskLogs.get(toolCallId);
 
         if (status === "completed" || status === "failed") {
-          const pending = this.pendingTools.get(toolCallId);
-          this.pendingTools.delete(toolCallId);
-
-          const kindColor =
-            kind === "edit"
-              ? c.yellow
-              : kind === "execute"
-                ? c.magenta
-                : kind === "read"
-                  ? c.dim
-                  : c.cyan;
-
-          const statusIcon = status === "completed" ? c.green : c.red;
-          const statusChar = status === "completed" ? "*" : "x";
-
-          // Get file info for edits
+          // Get file info for edits by extracting diff from content array
           let diffInfo = "";
-          if (kind === "edit" && rawOutput?.metadata) {
-            const meta = rawOutput.metadata as Record<string, unknown>;
-            const filediff = meta.filediff as {
-              file?: string;
-              additions?: number;
-              deletions?: number;
-            };
-            if (filediff) {
-              diffInfo = formatDiff(
-                filediff.additions || 0,
-                filediff.deletions || 0,
-              );
+          if (kind === "edit") {
+            const contentArray = update.content as unknown[] | undefined;
+            const diffEntry = contentArray?.find(
+              (c): c is { type: "diff"; newText: string; oldText: string } =>
+                typeof c === "object" &&
+                c !== null &&
+                (c as { type?: string }).type === "diff",
+            );
+
+            if (diffEntry) {
+              const newLines = diffEntry.newText
+                ? diffEntry.newText.split("\n").length
+                : 0;
+              const oldLines = diffEntry.oldText
+                ? diffEntry.oldText.split("\n").length
+                : 0;
+              diffInfo = formatDiff(newLines, oldLines);
             }
           }
 
@@ -171,13 +189,31 @@ class CodingClient implements acp.Client {
           const firstLocation = locations[0];
           if (firstLocation?.path) {
             displayText = shortPath(firstLocation.path);
-          } else if (title && title !== pending?.title) {
-            displayText = shortPath(title);
           }
 
-          console.log(
-            `${statusIcon}${statusChar}${c.reset} ${kindColor}${kind.padEnd(7)}${c.reset} ${displayText}${diffInfo}`,
-          );
+          const resultMessage = `${displayText}${diffInfo}`;
+
+          if (activeTask) {
+            if (status === "completed") {
+              activeTask.log.success(resultMessage);
+            } else {
+              activeTask.log.error(resultMessage);
+            }
+            this.activeTaskLogs.delete(toolCallId);
+          } else {
+            // Fallback if no active task log
+            if (status === "completed") {
+              p.log.success(resultMessage);
+            } else {
+              p.log.error(resultMessage);
+            }
+          }
+        } else if (status === "in_progress" && activeTask) {
+          // Update the task log with progress info
+          const firstLocation = locations[0];
+          if (firstLocation?.path) {
+            activeTask.log.message(shortPath(firstLocation.path));
+          }
         }
         break;
       }
@@ -189,6 +225,10 @@ class CodingClient implements acp.Client {
           priority?: string;
         }[];
 
+        // Only show plan if there are pending/in_progress items
+        const hasActive = entries.some((e) => e.status !== "completed");
+        if (!hasActive) break;
+
         // Create a hash to avoid duplicate prints
         const planHash = entries.map((e) => `${e.status}:${e.content}`).join();
         if (planHash === this.lastPlanHash) break;
@@ -199,19 +239,22 @@ class CodingClient implements acp.Client {
         ).length;
         const total = entries.length;
 
-        console.log(
-          `\n${c.blue}plan${c.reset} ${c.dim}${completed}/${total}${c.reset}`,
-        );
+        // Build plan display using box
+        const planLines: string[] = [];
         for (const entry of entries) {
           const marker =
             entry.status === "completed"
-              ? `${c.green}+${c.reset}`
+              ? "✓"
               : entry.status === "in_progress"
-                ? `${c.yellow}>${c.reset}`
-                : `${c.dim}-${c.reset}`;
-          const textColor = entry.status === "completed" ? c.dim : "";
-          console.log(`  ${marker} ${textColor}${entry.content}${c.reset}`);
+                ? "→"
+                : "○";
+          planLines.push(`${marker} ${entry.content}`);
         }
+
+        p.box(planLines.join("\n"), `Plan (${completed}/${total})`, {
+          contentAlign: "left",
+          titleAlign: "left",
+        });
         break;
       }
     }
@@ -287,15 +330,15 @@ export async function growCommand(args: string[]) {
     process.exit(0);
   }
 
-  const s = p.spinner();
-  s.start("Fetching OpenAPI specification...");
+  const specSpinner = p.spinner();
+  specSpinner.start("Fetching OpenAPI specification...");
 
   let spec: OpenAPISpec;
   try {
     spec = await fetchOpenApiSpec(specPath);
-    s.stop("OpenAPI specification loaded");
+    specSpinner.stop("OpenAPI specification loaded");
   } catch (error) {
-    s.stop("Failed to load OpenAPI specification");
+    specSpinner.stop("Failed to load OpenAPI specification");
     const message = error instanceof Error ? error.message : String(error);
     p.log.error(message);
     process.exit(1);
@@ -380,10 +423,15 @@ export async function growCommand(args: string[]) {
     });
   }
 
+  const agentSpinner = p.spinner();
+  agentSpinner.start("Starting coding agent...");
+
   const agentProcess = spawn("opencode", ["acp"]);
 
   if (!agentProcess.stdin || !agentProcess.stdout) {
-    throw new Error("Failed to spawn agent process");
+    agentSpinner.stop("Failed to start agent");
+    p.log.error("Failed to spawn agent process");
+    process.exit(1);
   }
 
   const input = Writable.toWeb(agentProcess.stdin);
@@ -393,8 +441,8 @@ export async function growCommand(args: string[]) {
 
   // Create the client connection
   const client = new CodingClient();
-  const stream = acp.ndJsonStream(input, output);
-  const connection = new acp.ClientSideConnection(() => client, stream);
+  const agentStream = acp.ndJsonStream(input, output);
+  const connection = new acp.ClientSideConnection(() => client, agentStream);
 
   try {
     // Initialize the connection
@@ -408,17 +456,27 @@ export async function growCommand(args: string[]) {
       },
     });
 
-    console.log(
-      `✅ Connected to agent (protocol v${initResult.protocolVersion})`,
+    agentSpinner.stop(
+      `Connected to agent (protocol v${initResult.protocolVersion})`,
     );
 
     // Create a new session
+    const sessionSpinner = p.spinner();
+    sessionSpinner.start("Creating session...");
+
     const sessionResult = await connection.newSession({
       cwd: process.cwd(),
       mcpServers: [],
     });
 
-    console.log(`📝 Created session: ${sessionResult.sessionId}`);
+    sessionSpinner.stop(`Session created: ${sessionResult.sessionId}`);
+
+    p.note(
+      `Generating ${endpointsWithMapping.length} MCP tool(s) from OpenAPI endpoints`,
+      "Agent Task",
+    );
+
+    console.log(); // Add spacing before agent output
 
     const promptResult = await connection.prompt({
       sessionId: sessionResult.sessionId,
@@ -446,12 +504,22 @@ export async function growCommand(args: string[]) {
       ],
     });
 
-    console.log(`\n\n✅ Agent completed with: ${promptResult.stopReason}`);
+    console.log(); // Add spacing after agent output
+
+    if (promptResult.stopReason === "end_turn") {
+      p.outro("✨ MCP tools generated successfully!");
+    } else if (promptResult.stopReason === "cancelled") {
+      p.cancel("Generation cancelled");
+    } else {
+      p.log.info(`Agent stopped: ${promptResult.stopReason}`);
+      p.outro("Generation complete");
+    }
   } catch (error) {
-    console.error("[Client] Error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    p.log.error(`Agent error: ${message}`);
+    process.exit(1);
   } finally {
     agentProcess.kill();
-    process.exit(0);
   }
 }
 
