@@ -303,15 +303,22 @@ export async function growCommand(args: string[]) {
       prompt: [
         {
           type: "text",
-          text: "Your job is to generate MCP tools from the OpenAPI specification. You will be given a list of endpoints and you will need to generate a tool for each endpoint.",
-        },
-        {
-          type: "text",
-          text:
-            "Currently, you are in the following directory: " +
-            process.cwd() +
-            "\n\nThe endpoints to generate tools for are as follows: " +
-            JSON.stringify(endpointsWithMapping, null, 2),
+          text: `Your job is to generate MCP tools from the OpenAPI specification. You will be given a list of endpoints and you will need to generate a tool for each endpoint. Follow these instructions:
+
+          - Place each tool in the tools directory as a separate file.
+          - You should make a fetch request for each endpoint.
+          - You can take the base url from API_BASE_URL environment variable.
+          - For tool input write Zod schema, if any description is provided, use it in the schema if not generate useful but short description.
+          - For tool output use the Zod schema and return only fields that are selected.
+
+          <current-directory>
+          ${process.cwd()}
+          </current-directory>
+
+          <endpoints>
+          ${JSON.stringify(endpointsWithMapping, null, 2)}
+          </endpoints>
+          `,
         },
       ],
     });
