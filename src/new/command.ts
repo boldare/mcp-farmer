@@ -94,9 +94,9 @@ async function copyTemplate(
 }
 
 const scriptRunners: Record<PackageManager, string> = {
-  npm: "node",
-  pnpm: "node",
-  yarn: "node",
+  npm: "tsx",
+  pnpm: "tsx",
+  yarn: "tsx",
   deno: "deno run",
   bun: "bun",
 };
@@ -112,19 +112,17 @@ const packageRunners: Record<PackageManager, string> = {
 function buildPackageJsonScripts(
   packageManager: PackageManager,
   transports: string[],
-  releaseOptions: string[],
 ): Record<string, string> {
   const runner = scriptRunners[packageManager];
-  const scripts: Record<string, string> = {};
+  const scripts: Record<string, string> = {
+    build: "tsc",
+  };
 
   if (transports.includes("http")) {
     scripts.http = `${runner} http.ts`;
   }
   if (transports.includes("stdio")) {
     scripts.stdio = `${runner} stdio.ts`;
-  }
-  if (releaseOptions.includes("docker")) {
-    scripts.build = "tsc";
   }
 
   return scripts;
@@ -135,6 +133,7 @@ async function copyPackageJson(
   name: string,
   scripts: Record<string, string>,
   extraDependencies: Record<string, string>,
+  extraDevDependencies: Record<string, string>,
 ) {
   const sourcePath = join(templatesDir, "package.json");
   const content = await readFile(sourcePath, "utf-8");
@@ -143,6 +142,7 @@ async function copyPackageJson(
   pkg.name = name;
   pkg.scripts = scripts;
   pkg.dependencies = { ...pkg.dependencies, ...extraDependencies };
+  pkg.devDependencies = { ...pkg.devDependencies, ...extraDevDependencies };
 
   await writeFile(targetPath, JSON.stringify(pkg, null, 2) + "\n");
 }
@@ -163,7 +163,7 @@ export async function newCommand(args: string[]) {
       name: { type: "string" },
       path: { type: "string" },
       transport: { type: "string" },
-      "http-framework": { type: "string", default: "native" },
+      "http-framework": { type: "string" },
       "package-manager": { type: "string" },
       "no-git": { type: "boolean", default: false },
       deploy: { type: "string" },
@@ -375,11 +375,7 @@ export async function newCommand(args: string[]) {
     const httpTemplate = httpFramework === "hono" ? "http-hono.ts" : "http.ts";
     const useHono = transports.includes("http") && httpFramework === "hono";
 
-    const scripts = buildPackageJsonScripts(
-      packageManager,
-      transports,
-      releaseOptions,
-    );
+    const scripts = buildPackageJsonScripts(packageManager, transports);
 
     const extraDependencies: Record<string, string> = useHono
       ? {
@@ -388,6 +384,13 @@ export async function newCommand(args: string[]) {
           "fetch-to-node": "^1.3.0",
         }
       : {};
+
+    const extraDevDependencies: Record<string, string> = {};
+    if (packageManager === "bun") {
+      extraDevDependencies["@types/bun"] = "^1.3.4";
+    } else if (packageManager !== "deno") {
+      extraDevDependencies["tsx"] = "^4.19.4";
+    }
 
     const readmeReplacements: Record<string, string> = {
       name,
@@ -427,6 +430,7 @@ docker run -p 3000:3000 ${name}
         name,
         scripts,
         extraDependencies,
+        extraDevDependencies,
       ),
       copyTemplate("server.ts", join(targetDir, "server.ts"), { name }),
       copyTemplate("tsconfig.json", join(targetDir, "tsconfig.json")),
