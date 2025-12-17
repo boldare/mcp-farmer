@@ -1,0 +1,17 @@
+{
+  "name": "{{name}}",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {},
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
+  }
+}

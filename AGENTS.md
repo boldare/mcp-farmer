@@ -47,8 +47,9 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 - `src/try/` - Try command: interactively call tools on an MCP server
   - `command.ts` - Try command logic: connects to server, lists tools, prompts for input, calls tool
 - `src/new/` - New command: scaffolds a new MCP server project
-  - `command.ts` - New command logic: interactive prompts, project initialization, dependency installation
+  - `command.ts` - New command logic: interactive prompts, template copying
   - `templates/` - Template files copied to new projects
+    - `package.json` - Package manifest with dependencies pre-defined
     - `server.ts` - MCP server definition template
     - `stdio.ts` - Stdio transport entry point
     - `http.ts` - HTTP transport entry point (Node.js built-in HTTP)
@@ -75,9 +76,10 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 1. CLI dispatches to `newCommand()` with args
 2. Prompts user for server name, directory path, language, and package manager
 3. For HTTP transport, optionally prompts for release options (Dockerfile)
-4. Creates project directory and initializes with selected package manager
-5. Copies template files with name substitutions (includes Docker files if selected)
-6. Installs dependencies (@modelcontextprotocol/sdk, zod) and dev dependencies (typescript, @types/node)
+4. Creates project directory
+5. Copies template files with name substitutions (package.json, server.ts, transport files, Docker files if selected)
+6. Initializes git repository if requested
+7. Displays instructions for user to run their package manager's install command
 
 ## Market Command Flow
 

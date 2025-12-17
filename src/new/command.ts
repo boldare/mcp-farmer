@@ -7,31 +7,12 @@ import { readFile, writeFile, access, mkdir } from "node:fs/promises";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "deno" | "bun";
 
-const initCommands: Record<PackageManager, string[]> = {
-  npm: ["npm", "init", "-y"],
-  pnpm: ["pnpm", "init"],
-  yarn: ["yarn", "init", "-y"],
-  deno: ["deno", "init"],
-  bun: ["bun", "init", "-y"],
-};
-
-const addCommands: Record<PackageManager, string[]> = {
-  npm: ["npm", "install"],
-  pnpm: ["pnpm", "add"],
-  yarn: ["yarn", "add"],
-  deno: ["deno", "add"],
-  bun: ["bun", "add"],
-};
-
-const dependencies = ["@modelcontextprotocol/sdk", "zod"];
-const devDependencies = ["typescript", "@types/node"];
-
-const addDevCommands: Record<PackageManager, string[]> = {
-  npm: ["npm", "install", "-D"],
-  pnpm: ["pnpm", "add", "-D"],
-  yarn: ["yarn", "add", "-D"],
-  deno: ["deno", "add", "--dev"],
-  bun: ["bun", "add", "-d"],
+const installCommands: Record<PackageManager, string> = {
+  npm: "npm install",
+  pnpm: "pnpm install",
+  yarn: "yarn install",
+  deno: "deno install",
+  bun: "bun install",
 };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -128,15 +109,11 @@ const packageRunners: Record<PackageManager, string> = {
   bun: "bunx",
 };
 
-async function addPackageScripts(
-  packageJsonPath: string,
+function buildPackageJsonScripts(
   packageManager: PackageManager,
   transports: string[],
   releaseOptions: string[],
-) {
-  const content = await readFile(packageJsonPath, "utf-8");
-  const pkg = JSON.parse(content);
-
+): Record<string, string> {
   const runner = scriptRunners[packageManager];
   const scripts: Record<string, string> = {};
 
@@ -146,17 +123,28 @@ async function addPackageScripts(
   if (transports.includes("stdio")) {
     scripts.stdio = `${runner} stdio.ts`;
   }
-
   if (releaseOptions.includes("docker")) {
     scripts.build = "tsc";
   }
 
-  pkg.scripts = {
-    ...pkg.scripts,
-    ...scripts,
-  };
+  return scripts;
+}
 
-  await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+async function copyPackageJson(
+  targetPath: string,
+  name: string,
+  scripts: Record<string, string>,
+  extraDependencies: Record<string, string>,
+) {
+  const sourcePath = join(templatesDir, "package.json");
+  const content = await readFile(sourcePath, "utf-8");
+  const pkg = JSON.parse(content);
+
+  pkg.name = name;
+  pkg.scripts = scripts;
+  pkg.dependencies = { ...pkg.dependencies, ...extraDependencies };
+
+  await writeFile(targetPath, JSON.stringify(pkg, null, 2) + "\n");
 }
 
 const validPackageManagers = ["npm", "pnpm", "yarn", "deno", "bun"] as const;
@@ -377,44 +365,29 @@ export async function newCommand(args: string[]) {
 
   await mkdir(targetDir, { recursive: true });
 
-  s.start("Initializing project");
-
-  try {
-    const initCmd = initCommands[packageManager];
-    const { exitCode, stderr } = await runCommand(initCmd, targetDir);
-
-    if (exitCode !== 0) {
-      throw new Error(`Init failed with exit code ${exitCode}: ${stderr}`);
-    }
-
-    await addPackageScripts(
-      join(targetDir, "package.json"),
-      packageManager,
-      transports,
-      releaseOptions,
-    );
-
-    s.stop("Project initialized");
-  } catch (error) {
-    s.stop("Failed to initialize project");
-    console.error(error);
-    process.exit(1);
-  }
-
   const runPrefix = packageManager === "npm" ? "npm run" : packageManager;
   const packageRunner = packageRunners[packageManager];
+  const installCommand = installCommands[packageManager];
 
   s.start("Creating project files");
 
   try {
     const httpTemplate = httpFramework === "hono" ? "http-hono.ts" : "http.ts";
+    const useHono = transports.includes("http") && httpFramework === "hono";
+
+    const scripts = buildPackageJsonScripts(
+      packageManager,
+      transports,
+      releaseOptions,
+    );
+
+    const extraDependencies: Record<string, string> = useHono
+      ? { hono: "^4.7.10", "fetch-to-node": "^1.3.0" }
+      : {};
 
     const readmeReplacements: Record<string, string> = {
       name,
-      installCommand:
-        packageManager === "deno"
-          ? "deno install"
-          : `${packageManager} install`,
+      installCommand: installCommand,
       runCommand: transports.includes("http")
         ? `${runPrefix} http`
         : `${runPrefix} stdio`,
@@ -445,6 +418,12 @@ docker run -p 3000:3000 ${name}
     };
 
     const filesToCopy: Promise<void>[] = [
+      copyPackageJson(
+        join(targetDir, "package.json"),
+        name,
+        scripts,
+        extraDependencies,
+      ),
       copyTemplate("server.ts", join(targetDir, "server.ts"), { name }),
       copyTemplate("tsconfig.json", join(targetDir, "tsconfig.json")),
       copyTemplate("gitignore", join(targetDir, ".gitignore")),
@@ -480,47 +459,6 @@ docker run -p 3000:3000 ${name}
     process.exit(1);
   }
 
-  s.start("Adding dependencies");
-
-  try {
-    const projectDependencies = [...dependencies];
-    if (transports.includes("http") && httpFramework === "hono") {
-      projectDependencies.push("hono", "fetch-to-node");
-    }
-
-    const addCmd = [...addCommands[packageManager], ...projectDependencies];
-    const { exitCode, stderr } = await runCommand(addCmd, targetDir);
-
-    if (exitCode !== 0) {
-      throw new Error(`Add failed with exit code ${exitCode}: ${stderr}`);
-    }
-
-    s.stop("Dependencies added");
-  } catch (error) {
-    s.stop("Failed to add dependencies");
-    console.error(error);
-    process.exit(1);
-  }
-
-  s.start("Adding dev dependencies");
-
-  try {
-    const addDevCmd = [...addDevCommands[packageManager], ...devDependencies];
-    const { exitCode, stderr } = await runCommand(addDevCmd, targetDir);
-
-    if (exitCode !== 0) {
-      throw new Error(
-        `Add dev dependencies failed with exit code ${exitCode}: ${stderr}`,
-      );
-    }
-
-    s.stop("Dev dependencies added");
-  } catch (error) {
-    s.stop("Failed to add dev dependencies");
-    console.error(error);
-    process.exit(1);
-  }
-
   if (project.initGit) {
     s.start("Initializing git repository");
 
@@ -552,7 +490,8 @@ docker run -p 3000:3000 ${name}
 
   p.outro(
     `Your MCP server is ready!\n\n` +
-      `  cd ${path}\n\n` +
+      `  cd ${path}\n` +
+      `  ${installCommand}\n\n` +
       runInstructions +
       `Note: Requires Node.js 20+`,
   );
