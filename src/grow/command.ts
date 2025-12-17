@@ -128,13 +128,12 @@ export async function growCommand(args: string[]) {
     process.exit(0);
   }
 
-  const selectedEndpoints = (selectedIndices as number[])
+  const selectedEndpoints = selectedIndices
     .map((i) => endpoints[i])
-    .filter((ep): ep is OpenAPIOperation => ep !== undefined);
+    .filter((ep) => ep !== undefined);
 
   const endpointsWithMapping: EndpointWithFieldMapping[] = [];
 
-  // Ask about response field mapping for each endpoint with responses
   for (const endpoint of selectedEndpoints) {
     const responseFields = getResponseFields(endpoint);
 
@@ -172,7 +171,7 @@ export async function growCommand(args: string[]) {
     });
   }
 
-  console.log(endpointsWithMapping);
+  console.log(JSON.stringify(endpointsWithMapping, null, 2));
 
   p.outro("Done");
 }
