@@ -441,6 +441,7 @@ docker run -p 3000:3000 ${name}
         readmeReplacements,
         true,
       ),
+      copyTemplate("AGENTS.md", join(targetDir, "AGENTS.md")),
     ];
 
     if (transports.includes("stdio")) {
