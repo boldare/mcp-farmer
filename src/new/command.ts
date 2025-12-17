@@ -382,7 +382,11 @@ export async function newCommand(args: string[]) {
     );
 
     const extraDependencies: Record<string, string> = useHono
-      ? { hono: "^4.7.10", "fetch-to-node": "^1.3.0" }
+      ? {
+          hono: "^4.7.10",
+          "@hono/node-server": "^1.14.1",
+          "fetch-to-node": "^1.3.0",
+        }
       : {};
 
     const readmeReplacements: Record<string, string> = {

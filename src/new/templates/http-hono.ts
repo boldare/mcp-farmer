@@ -1,9 +1,10 @@
 import { Hono } from "hono";
+import { serve } from "@hono/node-server";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { toFetchResponse, toReqRes } from "fetch-to-node";
 import { createMcpServer } from "./server.js";
 
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 const app = new Hono();
 
@@ -25,7 +26,6 @@ app.post("/mcp", async (c) => {
     await transport.handleRequest(req, res, await c.req.json());
 
     res.on("close", () => {
-      console.log("Request closed");
       transport.close();
       server.close();
     });
@@ -79,6 +79,6 @@ app.get("/health", async (c) => {
   return c.json({ status: "ok" }, { status: 200 });
 });
 
-console.log(`MCP server listening on http://localhost:${PORT}/mcp`);
-
-export default app;
+serve({ fetch: app.fetch, port: PORT }, () => {
+  console.log(`MCP server listening on http://localhost:${PORT}/mcp`);
+});

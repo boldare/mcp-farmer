@@ -2,7 +2,7 @@ import { createServer as createHttpServer } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "./server.js";
 
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 const httpServer = createHttpServer(async (req, res) => {
   if (req.url === "/health") {
@@ -22,7 +22,21 @@ const httpServer = createHttpServer(async (req, res) => {
     for await (const chunk of req) {
       chunks.push(chunk);
     }
-    const body = JSON.parse(Buffer.concat(chunks).toString());
+
+    let body;
+    try {
+      body = JSON.parse(Buffer.concat(chunks).toString());
+    } catch {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          error: { code: -32700, message: "Parse error" },
+          id: null,
+        }),
+      );
+      return;
+    }
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -30,6 +44,12 @@ const httpServer = createHttpServer(async (req, res) => {
 
     const server = createMcpServer();
     await server.connect(transport);
+
+    res.on("close", () => {
+      transport.close();
+      server.close();
+    });
+
     await transport.handleRequest(req, res, body);
     return;
   }
