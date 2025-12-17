@@ -1,4 +1,54 @@
 import * as p from "@clack/prompts";
+import * as acp from "@agentclientprotocol/sdk";
+import * as fs from "node:fs/promises";
+
+class CodingClient implements acp.Client {
+  async requestPermission(
+    params: acp.RequestPermissionRequest,
+  ): Promise<acp.RequestPermissionResponse> {
+    const response = await p.select({
+      message: "Select an option:",
+      options: params.options.map((option) => ({
+        value: option.optionId,
+        label: option.name,
+        hint: option.kind,
+      })),
+    });
+
+    if (p.isCancel(response)) {
+      return {
+        outcome: {
+          outcome: "cancelled",
+        },
+      };
+    }
+
+    return {
+      outcome: {
+        outcome: "selected",
+        optionId: response,
+      },
+    };
+  }
+
+  async readTextFile(
+    params: acp.ReadTextFileRequest,
+  ): Promise<acp.ReadTextFileResponse> {
+    const content = await fs.readFile(params.path, "utf8");
+
+    return {
+      content: content,
+    };
+  }
+
+  async writeTextFile(
+    params: acp.WriteTextFileRequest,
+  ): Promise<acp.WriteTextFileResponse> {
+    await fs.writeFile(params.path, params.content);
+
+    return {};
+  }
+}
 
 import {
   fetchOpenApiSpec,
