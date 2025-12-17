@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/boldare/mcp-farmer/compare/v1.1.0...v1.2.0) (2025-12-17)
+
+
+### Features
+
+* allow using new command with cli args ([b89cd2d](https://github.com/boldare/mcp-farmer/commit/b89cd2dcea03995a6c31f6118bd4dce519b9ff0f))
+* create src directory for new mcp server ([e80bc01](https://github.com/boldare/mcp-farmer/commit/e80bc01fb44a06e8e8ad093ca799b74ffcb25cc4))
+* don't run install script with new command ([f4513ec](https://github.com/boldare/mcp-farmer/commit/f4513ec52f024475642b2b29d03bf805ff6c08d2))
+* generate simple agents file ([b62b865](https://github.com/boldare/mcp-farmer/commit/b62b8654c7b7118908caddd24c5fcf736af26bd0))
+* improve generated mcp server code ([3ff71dd](https://github.com/boldare/mcp-farmer/commit/3ff71ddb54830927e9005522bbb3b9e789c3f252))
+* improve handling of connection and network errors ([473b98c](https://github.com/boldare/mcp-farmer/commit/473b98caa653e10b59cad70fedb2cb7760d4e3b2))
+* make the generated mcp server scripts more robust ([2c7b076](https://github.com/boldare/mcp-farmer/commit/2c7b07610dcd47c379f9ca13513c1a3fdeedad3f))
+
 ## [1.1.0](https://github.com/boldare/mcp-farmer/compare/v1.0.0...v1.1.0) (2025-12-16)
 
 
