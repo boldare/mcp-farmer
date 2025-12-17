@@ -1,6 +1,7 @@
 import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 
@@ -13,7 +14,42 @@ import {
   type ResponseField,
 } from "./openapi.js";
 
+// ANSI color codes
+const c = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  bold: "\x1b[1m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  red: "\x1b[31m",
+  gray: "\x1b[90m",
+};
+
+function shortPath(filePath: string): string {
+  const cwd = process.cwd();
+  if (filePath.startsWith(cwd)) {
+    return filePath.slice(cwd.length + 1);
+  }
+  return path.basename(filePath);
+}
+
+function formatDiff(additions: number, deletions: number): string {
+  const parts: string[] = [];
+  if (additions > 0) parts.push(`${c.green}+${additions}${c.reset}`);
+  if (deletions > 0) parts.push(`${c.red}-${deletions}${c.reset}`);
+  return parts.length > 0 ? ` (${parts.join(" ")})` : "";
+}
+
 class CodingClient implements acp.Client {
+  private pendingTools = new Map<
+    string,
+    { kind: string; title: string; startTime: number }
+  >();
+  private lastPlanHash = "";
+
   async requestPermission(
     params: acp.RequestPermissionRequest,
   ): Promise<acp.RequestPermissionResponse> {
@@ -61,37 +97,123 @@ class CodingClient implements acp.Client {
   }
 
   async sessionUpdate({ update }: acp.SessionNotification): Promise<void> {
+    const u = update as Record<string, unknown>;
+
     switch (update.sessionUpdate) {
       case "agent_message_chunk":
-        if (update.content.type === "text") {
+        if (update.content.type === "text" && update.content.text.trim()) {
           process.stdout.write(update.content.text);
         }
         break;
+
       case "agent_thought_chunk":
-        if (update.content.type === "text") {
-          process.stdout.write(`\x1b[90m${update.content.text}\x1b[0m`);
+        if (update.content.type === "text" && update.content.text.trim()) {
+          process.stdout.write(`${c.gray}${update.content.text}${c.reset}`);
         }
         break;
-      case "tool_call":
-        console.log(`\n\x1b[36m[tool] ${update.title}\x1b[0m`);
+
+      case "tool_call": {
+        const toolCallId = u.toolCallId as string;
+        const kind = (u.kind as string) || "other";
+        const title = (u.title as string) || "";
+
+        this.pendingTools.set(toolCallId, {
+          kind,
+          title,
+          startTime: Date.now(),
+        });
         break;
-      case "tool_call_update":
-        if (update.status === "completed" || update.status === "failed") {
-          console.log(`  -> ${update.status}`);
+      }
+
+      case "tool_call_update": {
+        const toolCallId = u.toolCallId as string;
+        const status = u.status as string;
+        const kind = (u.kind as string) || "other";
+        const title = (u.title as string) || "";
+        const locations = (u.locations as { path: string }[]) || [];
+        const rawOutput = u.rawOutput as Record<string, unknown> | undefined;
+
+        if (status === "completed" || status === "failed") {
+          const pending = this.pendingTools.get(toolCallId);
+          this.pendingTools.delete(toolCallId);
+
+          const kindColor =
+            kind === "edit"
+              ? c.yellow
+              : kind === "execute"
+                ? c.magenta
+                : kind === "read"
+                  ? c.dim
+                  : c.cyan;
+
+          const statusIcon = status === "completed" ? c.green : c.red;
+          const statusChar = status === "completed" ? "*" : "x";
+
+          // Get file info for edits
+          let diffInfo = "";
+          if (kind === "edit" && rawOutput?.metadata) {
+            const meta = rawOutput.metadata as Record<string, unknown>;
+            const filediff = meta.filediff as {
+              file?: string;
+              additions?: number;
+              deletions?: number;
+            };
+            if (filediff) {
+              diffInfo = formatDiff(
+                filediff.additions || 0,
+                filediff.deletions || 0,
+              );
+            }
+          }
+
+          // Determine what to show
+          let displayText = title;
+          const firstLocation = locations[0];
+          if (firstLocation?.path) {
+            displayText = shortPath(firstLocation.path);
+          } else if (title && title !== pending?.title) {
+            displayText = shortPath(title);
+          }
+
+          console.log(
+            `${statusIcon}${statusChar}${c.reset} ${kindColor}${kind.padEnd(7)}${c.reset} ${displayText}${diffInfo}`,
+          );
         }
         break;
-      case "plan":
-        console.log(`\n\x1b[34m[plan]\x1b[0m`);
-        for (const entry of update.entries) {
+      }
+
+      case "plan": {
+        const entries = update.entries as {
+          content: string;
+          status: string;
+          priority?: string;
+        }[];
+
+        // Create a hash to avoid duplicate prints
+        const planHash = entries.map((e) => `${e.status}:${e.content}`).join();
+        if (planHash === this.lastPlanHash) break;
+        this.lastPlanHash = planHash;
+
+        const completed = entries.filter(
+          (e) => e.status === "completed",
+        ).length;
+        const total = entries.length;
+
+        console.log(
+          `\n${c.blue}plan${c.reset} ${c.dim}${completed}/${total}${c.reset}`,
+        );
+        for (const entry of entries) {
           const marker =
             entry.status === "completed"
-              ? "[x]"
+              ? `${c.green}+${c.reset}`
               : entry.status === "in_progress"
-                ? "[>]"
-                : "[ ]";
-          console.log(`  ${marker} ${entry.content}`);
+                ? `${c.yellow}>${c.reset}`
+                : `${c.dim}-${c.reset}`;
+          const textColor = entry.status === "completed" ? c.dim : "";
+          console.log(`  ${marker} ${textColor}${entry.content}${c.reset}`);
         }
         break;
+      }
     }
   }
 }
@@ -306,6 +428,7 @@ export async function growCommand(args: string[]) {
           text: `Your job is to generate MCP tools from the OpenAPI specification. You will be given a list of endpoints and you will need to generate a tool for each endpoint. Follow these instructions:
 
           - Place each tool in the tools directory as a separate file.
+          - Each function should accept a server instance argument and register the tool using the server instance.
           - You should make a fetch request for each endpoint.
           - You can take the base url from API_BASE_URL environment variable.
           - For tool input write Zod schema, if any description is provided, use it in the schema if not generate useful but short description.
