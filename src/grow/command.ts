@@ -64,13 +64,33 @@ class CodingClient implements acp.Client {
     switch (update.sessionUpdate) {
       case "agent_message_chunk":
         if (update.content.type === "text") {
-          console.log(update.content.text);
-        } else {
-          console.log(`[${update.content.type}]`);
+          process.stdout.write(update.content.text);
+        }
+        break;
+      case "agent_thought_chunk":
+        if (update.content.type === "text") {
+          process.stdout.write(`\x1b[90m${update.content.text}\x1b[0m`);
         }
         break;
       case "tool_call":
-        console.log(update.title);
+        console.log(`\n\x1b[36m[tool] ${update.title}\x1b[0m`);
+        break;
+      case "tool_call_update":
+        if (update.status === "completed" || update.status === "failed") {
+          console.log(`  -> ${update.status}`);
+        }
+        break;
+      case "plan":
+        console.log(`\n\x1b[34m[plan]\x1b[0m`);
+        for (const entry of update.entries) {
+          const marker =
+            entry.status === "completed"
+              ? "[x]"
+              : entry.status === "in_progress"
+                ? "[>]"
+                : "[ ]";
+          console.log(`  ${marker} ${entry.content}`);
+        }
         break;
     }
   }
