@@ -9,5 +9,6 @@ It provides the core functionality for creating MCP servers, defining tools, res
 
 ## Project Structure
 
-- `server.ts` - Main server logic and tool registration
-- `tools/` - Directory for tool definitions. **New tools should be added here.**
+- `src/` - Source code directory
+  - `server.ts` - Main server logic and tool registration
+  - `tools/` - Directory for tool definitions. **New tools should be added here.**

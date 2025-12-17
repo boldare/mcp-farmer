@@ -119,10 +119,10 @@ function buildPackageJsonScripts(
   };
 
   if (transports.includes("http")) {
-    scripts.http = `${runner} http.ts`;
+    scripts.http = `${runner} src/http.ts`;
   }
   if (transports.includes("stdio")) {
-    scripts.stdio = `${runner} stdio.ts`;
+    scripts.stdio = `${runner} src/stdio.ts`;
   }
 
   return scripts;
@@ -364,6 +364,8 @@ export async function newCommand(args: string[]) {
   const s = p.spinner();
 
   await mkdir(targetDir, { recursive: true });
+  const srcDir = join(targetDir, "src");
+  await mkdir(srcDir, { recursive: true });
 
   const runPrefix = packageManager === "npm" ? "npm run" : packageManager;
   const packageRunner = packageRunners[packageManager];
@@ -372,16 +374,17 @@ export async function newCommand(args: string[]) {
   s.start("Creating project files");
 
   try {
-    const httpTemplate = httpFramework === "hono" ? "http-hono.ts" : "http.ts";
+    const httpTemplate =
+      httpFramework === "hono" ? "src/http-hono.ts" : "src/http.ts";
     const useHono = transports.includes("http") && httpFramework === "hono";
 
     const scripts = buildPackageJsonScripts(packageManager, transports);
 
     const extraDependencies: Record<string, string> = useHono
       ? {
-          hono: "^4.7.10",
-          "@hono/node-server": "^1.14.1",
-          "fetch-to-node": "^1.3.0",
+          hono: "^4.11.1",
+          "@hono/node-server": "^1.19.7",
+          "fetch-to-node": "^2.1.0",
         }
       : {};
 
@@ -401,10 +404,10 @@ export async function newCommand(args: string[]) {
       vetHttpCommand: `${packageRunner} mcp-farmer vet http://localhost:3000/mcp`,
       vetStdioCommand: `${packageRunner} mcp-farmer vet -- ${runPrefix} stdio`,
       httpFileDoc: transports.includes("http")
-        ? "- `http.ts` - HTTP transport entry point\n"
+        ? "  - `http.ts` - HTTP transport entry point\n"
         : "",
       stdioFileDoc: transports.includes("stdio")
-        ? "- `stdio.ts` - stdio transport entry point\n"
+        ? "  - `stdio.ts` - stdio transport entry point\n"
         : "",
       dockerFileDoc: releaseOptions.includes("docker")
         ? "- `Dockerfile` - Docker container configuration\n"
@@ -432,7 +435,7 @@ docker run -p 3000:3000 ${name}
         extraDependencies,
         extraDevDependencies,
       ),
-      copyTemplate("server.ts", join(targetDir, "server.ts"), { name }),
+      copyTemplate("src/server.ts", join(srcDir, "server.ts"), { name }),
       copyTemplate("tsconfig.json", join(targetDir, "tsconfig.json")),
       copyTemplate("gitignore", join(targetDir, ".gitignore")),
       copyTemplate(
@@ -445,11 +448,11 @@ docker run -p 3000:3000 ${name}
     ];
 
     if (transports.includes("stdio")) {
-      filesToCopy.push(copyTemplate("stdio.ts", join(targetDir, "stdio.ts")));
+      filesToCopy.push(copyTemplate("src/stdio.ts", join(srcDir, "stdio.ts")));
     }
 
     if (transports.includes("http")) {
-      filesToCopy.push(copyTemplate(httpTemplate, join(targetDir, "http.ts")));
+      filesToCopy.push(copyTemplate(httpTemplate, join(srcDir, "http.ts")));
     }
 
     if (releaseOptions.includes("docker")) {

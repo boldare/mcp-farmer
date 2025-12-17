@@ -10,10 +10,11 @@ COPY package*.json ./
 RUN npm ci
 
 # Copy source files
-COPY . .
+COPY tsconfig.json ./
+COPY src ./src
 
-# Build TypeScript (if applicable)
-RUN npm run build 2>/dev/null || true
+# Build TypeScript
+RUN npm run build
 
 # Production stage
 FROM node:22-alpine
@@ -37,4 +38,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
 # Run the server
-CMD ["node", "dist/http.js"]
+CMD ["node", "dist/src/http.js"]
