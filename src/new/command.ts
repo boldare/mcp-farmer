@@ -1,4 +1,5 @@
 import * as p from "@clack/prompts";
+import { parseArgs } from "node:util";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -42,10 +43,21 @@ function printHelp() {
 Create a new MCP server project.
 
 Options:
-  --help       Show this help message
+  --name <name>            Server name (required if using CLI args)
+  --path <path>            Directory path (defaults to ./<name>)
+  --transport <type>       Transport types: stdio, http, or both (comma-separated)
+  --http-framework <type>  HTTP framework: native or hono (default: native)
+  --package-manager <pm>   Package manager: npm, pnpm, yarn, deno, or bun
+  --no-git                 Skip git initialization
+  --deploy <option>        Deployment option: docker (HTTP transport only)
+  --help                   Show this help message
 
 Examples:
-  mcp-farmer new`);
+  mcp-farmer new
+  mcp-farmer new --name my-server
+  mcp-farmer new --name my-server --transport stdio --package-manager bun
+  mcp-farmer new --name my-server --transport http --http-framework hono --deploy docker
+  mcp-farmer new --name my-server --transport stdio,http --package-manager pnpm`);
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -147,51 +159,150 @@ async function addPackageScripts(
   await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
 }
 
+const validPackageManagers = ["npm", "pnpm", "yarn", "deno", "bun"] as const;
+const validTransports = ["stdio", "http"] as const;
+const validHttpFrameworks = ["native", "hono"] as const;
+const validDeployOptions = ["docker"] as const;
+
+function parseTransports(input: string): string[] {
+  return input.split(",").map((t) => t.trim().toLowerCase());
+}
+
 export async function newCommand(args: string[]) {
-  if (args.includes("--help") || args.includes("-h")) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      name: { type: "string" },
+      path: { type: "string" },
+      transport: { type: "string" },
+      "http-framework": { type: "string", default: "native" },
+      "package-manager": { type: "string" },
+      "no-git": { type: "boolean", default: false },
+      deploy: { type: "string" },
+      help: { short: "h", type: "boolean" },
+    },
+    strict: true,
+    allowPositionals: false,
+  });
+
+  if (values.help) {
     printHelp();
     process.exit(0);
+  }
+
+  // Validate CLI args if provided
+  if (
+    values["package-manager"] &&
+    !validPackageManagers.includes(
+      values["package-manager"] as (typeof validPackageManagers)[number],
+    )
+  ) {
+    console.error(
+      `Invalid package manager: ${values["package-manager"]}. Valid options: ${validPackageManagers.join(", ")}`,
+    );
+    process.exit(2);
+  }
+
+  if (values.transport) {
+    const transports = parseTransports(values.transport);
+    const invalid = transports.find(
+      (t) => !validTransports.includes(t as (typeof validTransports)[number]),
+    );
+    if (invalid) {
+      console.error(
+        `Invalid transport: ${invalid}. Valid options: ${validTransports.join(", ")}`,
+      );
+      process.exit(2);
+    }
+  }
+
+  if (
+    values["http-framework"] &&
+    !validHttpFrameworks.includes(
+      values["http-framework"] as (typeof validHttpFrameworks)[number],
+    )
+  ) {
+    console.error(
+      `Invalid HTTP framework: ${values["http-framework"]}. Valid options: ${validHttpFrameworks.join(", ")}`,
+    );
+    process.exit(2);
+  }
+
+  if (
+    values.deploy &&
+    !validDeployOptions.includes(
+      values.deploy as (typeof validDeployOptions)[number],
+    )
+  ) {
+    console.error(
+      `Invalid deploy option: ${values.deploy}. Valid options: ${validDeployOptions.join(", ")}`,
+    );
+    process.exit(2);
+  }
+
+  // Validate that --deploy and --http-framework require HTTP transport
+  if (values.transport) {
+    const transports = parseTransports(values.transport);
+    if (!transports.includes("http")) {
+      if (values.deploy) {
+        console.error("--deploy requires HTTP transport (--transport http)");
+        process.exit(2);
+      }
+      if (values["http-framework"]) {
+        console.error(
+          "--http-framework requires HTTP transport (--transport http)",
+        );
+        process.exit(2);
+      }
+    }
   }
 
   p.intro("Create a new MCP server");
 
   const project = await p.group(
     {
-      name: () =>
-        p.text({
+      name: () => {
+        if (values.name) return Promise.resolve(values.name);
+        return p.text({
           message: "Server name:",
           placeholder: "my-mcp-server",
           validate(value) {
             if (!value) return "Name is required";
           },
-        }),
-      path: ({ results }) =>
-        p.text({
+        });
+      },
+      path: ({ results }) => {
+        if (values.path) return Promise.resolve(values.path);
+        const defaultPath = `./${results.name}`;
+        return p.text({
           message: "Directory path:",
-          placeholder: `./${results.name}`,
-          initialValue: `./${results.name}`,
+          placeholder: defaultPath,
+          initialValue: defaultPath,
           validate(value) {
             if (!value) return "Path is required";
           },
-        }),
-      language: () =>
-        p.select({
-          message: "Language:",
-          options: [{ value: "typescript", label: "TypeScript" }],
-        }),
-      transports: () =>
-        p.multiselect({
+        });
+      },
+      language: () => Promise.resolve("typescript"),
+      transports: () => {
+        if (values.transport) {
+          return Promise.resolve(parseTransports(values.transport));
+        }
+        return p.multiselect({
           message: "Transport types:",
           options: [
             { value: "stdio", label: "stdio" },
             { value: "http", label: "http" },
           ],
           required: true,
-        }),
+        });
+      },
       httpFramework: ({ results }) => {
-        const transports = results.transports;
-        if (!transports?.includes("http")) {
-          return;
+        if (!results.transports?.includes("http")) {
+          return Promise.resolve(undefined);
+        }
+        if (values["http-framework"]) {
+          return Promise.resolve(values["http-framework"]);
         }
         return p.select({
           message: "HTTP framework:",
@@ -201,8 +312,11 @@ export async function newCommand(args: string[]) {
           ] as const,
         });
       },
-      packageManager: () =>
-        p.select({
+      packageManager: () => {
+        if (values["package-manager"]) {
+          return Promise.resolve(values["package-manager"]);
+        }
+        return p.select({
           message: "Package manager:",
           options: [
             { value: "npm", label: "npm" },
@@ -211,15 +325,21 @@ export async function newCommand(args: string[]) {
             { value: "deno", label: "deno" },
             { value: "bun", label: "bun" },
           ] as const,
-        }),
-      initGit: () =>
-        p.confirm({
+        });
+      },
+      initGit: () => {
+        if (values["no-git"]) return Promise.resolve(false);
+        return p.confirm({
           message: "Initialize a git repository?",
           initialValue: true,
-        }),
+        });
+      },
       releaseOptions: ({ results }) => {
         if (!results.transports?.includes("http")) {
-          return;
+          return Promise.resolve([]);
+        }
+        if (values.deploy) {
+          return Promise.resolve([values.deploy]);
         }
         return p.multiselect({
           message: "Release options (optional):",
@@ -240,7 +360,7 @@ export async function newCommand(args: string[]) {
   const path = project.path as string;
   const transports = project.transports;
   const httpFramework = project.httpFramework ?? "native";
-  const packageManager = project.packageManager;
+  const packageManager = project.packageManager as PackageManager;
   const releaseOptions = (project.releaseOptions ?? []) as string[];
 
   const targetDir = join(process.cwd(), path);
