@@ -1,6 +1,17 @@
 import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
 import * as fs from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { Readable, Writable } from "node:stream";
+
+import {
+  fetchOpenApiSpec,
+  extractEndpoints,
+  getSpecVersion,
+  type OpenAPIOperation,
+  type OpenAPISpec,
+  type ResponseField,
+} from "./openapi.js";
 
 class CodingClient implements acp.Client {
   async requestPermission(
@@ -48,16 +59,22 @@ class CodingClient implements acp.Client {
 
     return {};
   }
-}
 
-import {
-  fetchOpenApiSpec,
-  extractEndpoints,
-  getSpecVersion,
-  type OpenAPIOperation,
-  type OpenAPISpec,
-  type ResponseField,
-} from "./openapi.js";
+  async sessionUpdate({ update }: acp.SessionNotification): Promise<void> {
+    switch (update.sessionUpdate) {
+      case "agent_message_chunk":
+        if (update.content.type === "text") {
+          console.log(update.content.text);
+        } else {
+          console.log(`[${update.content.type}]`);
+        }
+        break;
+      case "tool_call":
+        console.log(update.title);
+        break;
+    }
+  }
+}
 
 export interface EndpointWithFieldMapping extends OpenAPIOperation {
   selectedResponseFields?: string[];
@@ -221,9 +238,71 @@ export async function growCommand(args: string[]) {
     });
   }
 
-  console.log(JSON.stringify(endpointsWithMapping, null, 2));
+  const agentProcess = spawn("opencode", ["acp"]);
 
-  p.outro("Done");
+  if (!agentProcess.stdin || !agentProcess.stdout) {
+    throw new Error("Failed to spawn agent process");
+  }
+
+  const input = Writable.toWeb(agentProcess.stdin);
+  const output = Readable.toWeb(
+    agentProcess.stdout,
+  ) as ReadableStream<Uint8Array>;
+
+  // Create the client connection
+  const client = new CodingClient();
+  const stream = acp.ndJsonStream(input, output);
+  const connection = new acp.ClientSideConnection(() => client, stream);
+
+  try {
+    // Initialize the connection
+    const initResult = await connection.initialize({
+      protocolVersion: acp.PROTOCOL_VERSION,
+      clientCapabilities: {
+        fs: {
+          readTextFile: true,
+          writeTextFile: true,
+        },
+      },
+    });
+
+    console.log(
+      `✅ Connected to agent (protocol v${initResult.protocolVersion})`,
+    );
+
+    // Create a new session
+    const sessionResult = await connection.newSession({
+      cwd: process.cwd(),
+      mcpServers: [],
+    });
+
+    console.log(`📝 Created session: ${sessionResult.sessionId}`);
+
+    const promptResult = await connection.prompt({
+      sessionId: sessionResult.sessionId,
+      prompt: [
+        {
+          type: "text",
+          text: "Your job is to generate MCP tools from the OpenAPI specification. You will be given a list of endpoints and you will need to generate a tool for each endpoint.",
+        },
+        {
+          type: "text",
+          text:
+            "Currently, you are in the following directory: " +
+            process.cwd() +
+            "\n\nThe endpoints to generate tools for are as follows: " +
+            JSON.stringify(endpointsWithMapping, null, 2),
+        },
+      ],
+    });
+
+    console.log(`\n\n✅ Agent completed with: ${promptResult.stopReason}`);
+  } catch (error) {
+    console.error("[Client] Error:", error);
+  } finally {
+    agentProcess.kill();
+    process.exit(0);
+  }
 }
 
 function getResponseFields(endpoint: OpenAPIOperation): ResponseField[] {
