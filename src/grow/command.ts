@@ -266,9 +266,12 @@ export interface EndpointWithFieldMapping extends OpenAPIOperation {
 }
 
 function printHelp() {
-  console.log(`Usage: mcp-farmer grow [options]
+  console.log(`Usage: mcp-farmer grow <feature> [options]
 
-Generate MCP tools from external sources like OpenAPI specifications.
+Generate MCP capabilities
+
+Features:
+  openapi      Provide OpenAPI specification, select endpoints and fields
 
 Options:
   --help       Show this help message
@@ -294,20 +297,13 @@ export async function growCommand(args: string[]) {
 
   p.intro("Grow MCP Tools");
 
-  const sourceType = await p.select({
-    message: "What type of tools do you want to add?",
-    options: [
-      {
-        value: "openapi" as const,
-        label: "OpenAPI specification",
-        hint: "Generate tools from a Swagger/OpenAPI document",
-      },
-    ],
-  });
+  if (args.length === 0) {
+    p.log.error("Please provide a feature you woud like to grow");
+    return;
+  }
 
-  if (p.isCancel(sourceType)) {
-    p.cancel("Operation cancelled.");
-    process.exit(0);
+  if (args[0] !== "openapi") {
+    p.log.error("Invalid feature given")
   }
 
   p.note(
@@ -457,7 +453,7 @@ export async function growCommand(args: string[]) {
     });
 
     agentSpinner.stop(
-      `Connected to agent (protocol v${initResult.protocolVersion})`,
+      `Connected to agent ${initResult.agentInfo.name} ${initResult.agentInfo.version} via ACP protocol`,
     );
 
     // Create a new session
@@ -469,7 +465,7 @@ export async function growCommand(args: string[]) {
       mcpServers: [],
     });
 
-    sessionSpinner.stop(`Session created: ${sessionResult.sessionId}`);
+    sessionSpinner.stop(`Created new session and will use the ${sessionResult.models.currentModelId}`);
 
     p.note(
       `Generating ${endpointsWithMapping.length} MCP tool(s) from OpenAPI endpoints`,
