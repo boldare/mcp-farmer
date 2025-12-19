@@ -21,11 +21,11 @@ function printHelp() {
 A CLI tool for managing and analyzing MCP servers.
 
 Commands:
-  vet <url>    Vet an MCP server by connecting and running checks
-  new          Create a new MCP server project
-  market       Browse and install popular MCP servers
-  try <url>    Interactively call a tool on an MCP server
-  grow         Generate MCP tools from OpenAPI specifications
+  vet <url>        Vet an MCP server by connecting and running checks
+  new              Create a new MCP server project
+  market           Browse and install popular MCP servers
+  try <url>        Interactively call a tool on an MCP server
+  grow <feature>   Extend MCP server capabilities (eg. openapi)
 
 Options:
   --help       Show this help message
