@@ -16,9 +16,17 @@ import {
 } from "./tools.js";
 import type { Schema } from "../shared/schema.js";
 
+function createTool(overrides: Partial<Tool> = {}): Tool {
+  return {
+    name: "test-tool",
+    description: "Test description",
+    ...overrides,
+  } as Tool;
+}
+
 describe("checkToolDescriptions", () => {
   test("returns warning when tool has no description", () => {
-    const tool = { name: "my-tool" } as Tool;
+    const tool = createTool({ name: "my-tool", description: undefined });
 
     const findings = checkToolDescriptions(tool);
 
@@ -30,10 +38,10 @@ describe("checkToolDescriptions", () => {
   });
 
   test("returns no finding when tool has description", () => {
-    const tool = {
+    const tool = createTool({
       name: "my-tool",
       description: "Does something useful",
-    } as Tool;
+    });
 
     const findings = checkToolDescriptions(tool);
 
@@ -43,16 +51,15 @@ describe("checkToolDescriptions", () => {
 
 describe("checkInputDescriptions", () => {
   test("returns warning when input property has no description", () => {
-    const tool = {
+    const tool = createTool({
       name: "my-tool",
-      description: "A tool",
       inputSchema: {
         type: "object",
         properties: {
           query: { type: "string" },
         },
       },
-    } as Tool;
+    });
 
     const findings = checkInputDescriptions(tool);
 
@@ -67,9 +74,8 @@ describe("checkInputDescriptions", () => {
   });
 
   test("returns warnings for all inputs missing descriptions", () => {
-    const tool = {
+    const tool = createTool({
       name: "my-tool",
-      description: "A tool",
       inputSchema: {
         type: "object",
         properties: {
@@ -78,7 +84,7 @@ describe("checkInputDescriptions", () => {
           ecosystem: { type: "string" },
         },
       },
-    } as Tool;
+    });
 
     const findings = checkInputDescriptions(tool);
 
@@ -104,16 +110,15 @@ describe("checkInputDescriptions", () => {
   });
 
   test("returns no finding when input property has description", () => {
-    const tool = {
+    const tool = createTool({
       name: "my-tool",
-      description: "A tool",
       inputSchema: {
         type: "object",
         properties: {
           query: { type: "string", description: "The query to search for" },
         },
       },
-    } as Tool;
+    });
 
     const findings = checkInputDescriptions(tool);
 
@@ -123,9 +128,8 @@ describe("checkInputDescriptions", () => {
 
 describe("checkInputCount", () => {
   test("returns warning when tool has more than 5 required inputs", () => {
-    const tool = {
+    const tool = createTool({
       name: "complex-tool",
-      description: "A tool with many inputs",
       inputSchema: {
         type: "object",
         properties: {
@@ -138,7 +142,7 @@ describe("checkInputCount", () => {
         },
         required: ["a", "b", "c", "d", "e", "f"],
       },
-    } as Tool;
+    });
 
     const finding = checkInputCount(tool);
 
@@ -151,9 +155,8 @@ describe("checkInputCount", () => {
   });
 
   test("returns no finding when tool has 5 or fewer required inputs", () => {
-    const tool = {
+    const tool = createTool({
       name: "simple-tool",
-      description: "A simple tool",
       inputSchema: {
         type: "object",
         properties: {
@@ -162,7 +165,7 @@ describe("checkInputCount", () => {
         },
         required: ["a", "b"],
       },
-    } as Tool;
+    });
 
     const finding = checkInputCount(tool);
 
@@ -170,16 +173,15 @@ describe("checkInputCount", () => {
   });
 
   test("returns no finding when tool has no required inputs", () => {
-    const tool = {
+    const tool = createTool({
       name: "optional-tool",
-      description: "A tool with optional inputs only",
       inputSchema: {
         type: "object",
         properties: {
           a: { type: "string" },
         },
       },
-    } as Tool;
+    });
 
     const finding = checkInputCount(tool);
 
@@ -190,10 +192,10 @@ describe("checkInputCount", () => {
 describe("checkDuplicateToolNames", () => {
   test("returns error when tools have duplicate names", () => {
     const tools = [
-      { name: "search", description: "Search something" },
-      { name: "fetch", description: "Fetch data" },
-      { name: "search", description: "Another search" },
-    ] as Tool[];
+      createTool({ name: "search", description: "Search something" }),
+      createTool({ name: "fetch", description: "Fetch data" }),
+      createTool({ name: "search", description: "Another search" }),
+    ];
 
     const findings = checkDuplicateToolNames(tools);
 
@@ -208,12 +210,12 @@ describe("checkDuplicateToolNames", () => {
 
   test("returns multiple errors for multiple duplicates", () => {
     const tools = [
-      { name: "search", description: "Search 1" },
-      { name: "fetch", description: "Fetch 1" },
-      { name: "search", description: "Search 2" },
-      { name: "fetch", description: "Fetch 2" },
-      { name: "fetch", description: "Fetch 3" },
-    ] as Tool[];
+      createTool({ name: "search", description: "Search 1" }),
+      createTool({ name: "fetch", description: "Fetch 1" }),
+      createTool({ name: "search", description: "Search 2" }),
+      createTool({ name: "fetch", description: "Fetch 2" }),
+      createTool({ name: "fetch", description: "Fetch 3" }),
+    ];
 
     const findings = checkDuplicateToolNames(tools);
 
@@ -232,10 +234,10 @@ describe("checkDuplicateToolNames", () => {
 
   test("returns no findings when all tool names are unique", () => {
     const tools = [
-      { name: "search", description: "Search" },
-      { name: "fetch", description: "Fetch" },
-      { name: "list", description: "List" },
-    ] as Tool[];
+      createTool({ name: "search", description: "Search" }),
+      createTool({ name: "fetch", description: "Fetch" }),
+      createTool({ name: "list", description: "List" }),
+    ];
 
     const findings = checkDuplicateToolNames(tools);
 
@@ -251,10 +253,9 @@ describe("checkDuplicateToolNames", () => {
 
 describe("checkTotalToolCount", () => {
   function createTools(count: number): Tool[] {
-    return Array.from({ length: count }, (_, i) => ({
-      name: `tool-${i}`,
-      description: `Tool ${i}`,
-    })) as Tool[];
+    return Array.from({ length: count }, (_, i) =>
+      createTool({ name: `tool-${i}`, description: `Tool ${i}` }),
+    );
   }
 
   test("returns warning when server has more than 30 tools", () => {
@@ -325,7 +326,7 @@ describe("checkDangerousTools", () => {
     ["eraseAll", "erase"],
     ["unlinkFile", "unlink"],
   ])("detects %s as dangerous (contains %s)", (toolName, expectedWord) => {
-    const tool = { name: toolName, description: "Test" } as Tool;
+    const tool = createTool({ name: toolName });
 
     const finding = checkDangerousTools(tool);
 
@@ -347,7 +348,7 @@ describe("checkDangerousTools", () => {
     "executeTask",
     "commandParser",
   ])("returns no finding for safe tool: %s", (toolName) => {
-    const tool = { name: toolName, description: "Test" } as Tool;
+    const tool = createTool({ name: toolName });
 
     expect(checkDangerousTools(tool)).toBeNull();
   });
@@ -358,43 +359,46 @@ describe("checkSimilarDescriptions", () => {
     {
       name: "detects similar descriptions",
       tools: [
-        {
+        createTool({
           name: "searchUsers",
           description: "Search for users in the database by name or email",
-        },
-        {
+        }),
+        createTool({
           name: "findUsers",
           description:
             "Search for users in the database by name or email address",
-        },
-      ] as Tool[],
+        }),
+      ],
       expectFindings: true,
     },
     {
       name: "ignores distinct descriptions",
       tools: [
-        {
+        createTool({
           name: "searchUsers",
           description: "Search for users in the database by name or email",
-        },
-        {
+        }),
+        createTool({
           name: "createReport",
           description: "Generate a PDF report with analytics data and charts",
-        },
-      ] as Tool[],
+        }),
+      ],
       expectFindings: false,
     },
     {
       name: "ignores short descriptions",
       tools: [
-        { name: "tool1", description: "Do it" },
-        { name: "tool2", description: "Do it" },
-      ] as Tool[],
+        createTool({ name: "tool1", description: "Do it" }),
+        createTool({ name: "tool2", description: "Do it" }),
+      ],
       expectFindings: false,
     },
     {
       name: "ignores tools without descriptions",
-      tools: [{ name: "tool1" }, { name: "tool2" }] as Tool[],
+      tools: [
+        createTool({ name: "tool1", description: undefined }),
+        createTool({ name: "tool2", description: undefined }),
+      ],
       expectFindings: false,
     },
   ])("$name", ({ tools, expectFindings }) => {
@@ -411,7 +415,7 @@ describe("checkSimilarDescriptions", () => {
 
 describe("checkOutputSchema", () => {
   test("returns info when tool has no output schema", () => {
-    const tool = { name: "my-tool", description: "Test" } as Tool;
+    const tool = createTool({ name: "my-tool" });
 
     const finding = checkOutputSchema(tool);
 
@@ -423,17 +427,16 @@ describe("checkOutputSchema", () => {
   });
 
   test("returns no finding when tool has output schema", () => {
-    const tool = {
+    const tool = createTool({
       name: "my-tool",
-      description: "Test",
       inputSchema: { type: "object" },
-      outputSchema: {
-        type: "object",
-        properties: {
-          result: { type: "string" },
-        },
+    }) as Tool & { outputSchema: Schema };
+    tool.outputSchema = {
+      type: "object",
+      properties: {
+        result: { type: "string" },
       },
-    } as Tool & { outputSchema: Schema };
+    };
 
     const finding = checkOutputSchema(tool);
 
@@ -443,7 +446,7 @@ describe("checkOutputSchema", () => {
 
 describe("checkToolAnnotations", () => {
   test("returns info when tool has no annotations", () => {
-    const tool = { name: "my-tool", description: "Test" } as Tool;
+    const tool = createTool({ name: "my-tool" });
 
     const finding = checkToolAnnotations(tool);
 
@@ -456,13 +459,10 @@ describe("checkToolAnnotations", () => {
   });
 
   test("returns no finding when tool has annotations", () => {
-    const tool = {
+    const tool = createTool({
       name: "my-tool",
-      description: "Test",
-      annotations: {
-        readOnlyHint: true,
-      },
-    } as Tool;
+      annotations: { readOnlyHint: true },
+    });
 
     const finding = checkToolAnnotations(tool);
 
@@ -470,11 +470,7 @@ describe("checkToolAnnotations", () => {
   });
 
   test("returns no finding when tool has empty annotations object", () => {
-    const tool = {
-      name: "my-tool",
-      description: "Test",
-      annotations: {},
-    } as Tool;
+    const tool = createTool({ name: "my-tool", annotations: {} });
 
     const finding = checkToolAnnotations(tool);
 
@@ -495,7 +491,7 @@ describe("checkPiiHandling", () => {
     ["updateBirthday", "birthday"],
     ["getUserLocation", "location"],
   ])("detects PII in tool name: %s (contains %s)", (toolName, expectedWord) => {
-    const tool = { name: toolName, description: "Test" } as Tool;
+    const tool = createTool({ name: toolName });
 
     const finding = checkPiiHandling(tool);
 
@@ -506,10 +502,10 @@ describe("checkPiiHandling", () => {
   });
 
   test("detects PII in tool description", () => {
-    const tool = {
+    const tool = createTool({
       name: "fetchData",
       description: "Fetches user email and phone from the database",
-    } as Tool;
+    });
 
     const finding = checkPiiHandling(tool);
 
@@ -519,7 +515,7 @@ describe("checkPiiHandling", () => {
   });
 
   test("detects PII in input property names", () => {
-    const tool = {
+    const tool = createTool({
       name: "updateUser",
       description: "Updates user information",
       inputSchema: {
@@ -530,7 +526,7 @@ describe("checkPiiHandling", () => {
           userPassword: { type: "string", description: "Password" },
         },
       },
-    } as Tool;
+    });
 
     const finding = checkPiiHandling(tool);
 
@@ -541,7 +537,7 @@ describe("checkPiiHandling", () => {
   });
 
   test("returns unique PII matches only", () => {
-    const tool = {
+    const tool = createTool({
       name: "emailService",
       description: "Send email notifications",
       inputSchema: {
@@ -550,7 +546,7 @@ describe("checkPiiHandling", () => {
           email: { type: "string" },
         },
       },
-    } as Tool;
+    });
 
     const finding = checkPiiHandling(tool);
 
@@ -566,7 +562,7 @@ describe("checkPiiHandling", () => {
     "calculate-total",
     "runQuery",
   ])("returns no finding for safe tool: %s", (toolName) => {
-    const tool = {
+    const tool = createTool({
       name: toolName,
       description: "A safe tool",
       inputSchema: {
@@ -575,7 +571,7 @@ describe("checkPiiHandling", () => {
           query: { type: "string" },
         },
       },
-    } as Tool;
+    });
 
     expect(checkPiiHandling(tool)).toBeNull();
   });
