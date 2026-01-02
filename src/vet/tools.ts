@@ -3,22 +3,26 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { Schema } from "../shared/schema.js";
 
 export interface Finding {
+  ruleId: string;
   severity: "error" | "warning" | "info";
   message: string;
   toolName?: string;
   inputName?: string;
 }
 
-export function checkToolDescriptions(tool: Tool): Finding | null {
+export function checkToolDescriptions(tool: Tool): Finding[] {
   if (!tool.description) {
-    return {
-      severity: "warning",
-      message: "Missing tool description",
-      toolName: tool.name,
-    };
+    return [
+      {
+        ruleId: "missing-tool-description",
+        severity: "warning",
+        message: "Missing tool description",
+        toolName: tool.name,
+      },
+    ];
   }
 
-  return null;
+  return [];
 }
 
 export function checkInputDescriptions(tool: Tool): Finding[] {
@@ -29,6 +33,7 @@ export function checkInputDescriptions(tool: Tool): Finding[] {
   for (const [inputName, prop] of Object.entries(properties)) {
     if (!prop.description) {
       findings.push({
+        ruleId: "missing-input-description",
         severity: "warning",
         message: "Missing input description",
         toolName: tool.name,
@@ -203,24 +208,27 @@ function jaccardSimilarity(setA: Set<string>, setB: Set<string>): number {
   return intersectionSize / unionSize;
 }
 
-export function checkDangerousTools(tool: Tool): Finding | null {
+export function checkDangerousTools(tool: Tool): Finding[] {
   const tokens = tokenize(tool.name);
   const matched = tokens.find((token) =>
     DANGEROUS_WORDS.includes(token as (typeof DANGEROUS_WORDS)[number]),
   );
 
   if (matched) {
-    return {
-      severity: "warning",
-      message: `Potentially dangerous tool detected (contains "${matched}")`,
-      toolName: tool.name,
-    };
+    return [
+      {
+        ruleId: "dangerous-tool",
+        severity: "warning",
+        message: `Potentially dangerous tool detected (contains "${matched}")`,
+        toolName: tool.name,
+      },
+    ];
   }
 
-  return null;
+  return [];
 }
 
-export function checkPiiHandling(tool: Tool): Finding | null {
+export function checkPiiHandling(tool: Tool): Finding[] {
   const nameTokens = tokenize(tool.name);
   const descriptionTokens = tool.description ? tokenize(tool.description) : [];
 
@@ -236,56 +244,68 @@ export function checkPiiHandling(tool: Tool): Finding | null {
 
   if (matchedTokens.length > 0) {
     const uniqueMatches = [...new Set(matchedTokens)];
-    return {
-      severity: "info",
-      message: `May handle personal data (contains: ${uniqueMatches.join(", ")})`,
-      toolName: tool.name,
-    };
+    return [
+      {
+        ruleId: "pii-handling",
+        severity: "info",
+        message: `May handle personal data (contains: ${uniqueMatches.join(", ")})`,
+        toolName: tool.name,
+      },
+    ];
   }
 
-  return null;
+  return [];
 }
 
-export function checkInputCount(tool: Tool): Finding | null {
+export function checkInputCount(tool: Tool): Finding[] {
   const schema = tool.inputSchema as Schema | undefined;
   const requiredInputs = schema?.required ?? [];
 
   if (requiredInputs.length > MAX_REQUIRED_INPUTS) {
-    return {
-      severity: "warning",
-      message: `Too many required inputs (${requiredInputs.length}). Consider reducing to ${MAX_REQUIRED_INPUTS} or fewer for better LLM accuracy`,
-      toolName: tool.name,
-    };
+    return [
+      {
+        ruleId: "too-many-inputs",
+        severity: "warning",
+        message: `Too many required inputs (${requiredInputs.length}). Consider reducing to ${MAX_REQUIRED_INPUTS} or fewer for better LLM accuracy`,
+        toolName: tool.name,
+      },
+    ];
   }
 
-  return null;
+  return [];
 }
 
 export function checkOutputSchema(
   tool: Tool & { outputSchema?: Schema },
-): Finding | null {
+): Finding[] {
   if (!tool.outputSchema) {
-    return {
-      severity: "info",
-      message: "Missing output schema",
-      toolName: tool.name,
-    };
+    return [
+      {
+        ruleId: "missing-output-schema",
+        severity: "info",
+        message: "Missing output schema",
+        toolName: tool.name,
+      },
+    ];
   }
 
-  return null;
+  return [];
 }
 
-export function checkToolAnnotations(tool: Tool): Finding | null {
+export function checkToolAnnotations(tool: Tool): Finding[] {
   if (!tool.annotations) {
-    return {
-      severity: "info",
-      message:
-        "Missing tool annotations (readOnlyHint, idempotentHint, openWorldHint, destructiveHint)",
-      toolName: tool.name,
-    };
+    return [
+      {
+        ruleId: "missing-tool-annotations",
+        severity: "info",
+        message:
+          "Missing tool annotations (readOnlyHint, idempotentHint, openWorldHint, destructiveHint)",
+        toolName: tool.name,
+      },
+    ];
   }
 
-  return null;
+  return [];
 }
 
 export function checkDuplicateToolNames(tools: Tool[]): Finding[] {
@@ -299,6 +319,7 @@ export function checkDuplicateToolNames(tools: Tool[]): Finding[] {
   for (const [name, count] of seen) {
     if (count > 1) {
       findings.push({
+        ruleId: "duplicate-tool-name",
         severity: "error",
         message: `Duplicate tool name (appears ${count} times)`,
         toolName: name,
@@ -309,15 +330,18 @@ export function checkDuplicateToolNames(tools: Tool[]): Finding[] {
   return findings;
 }
 
-export function checkTotalToolCount(tools: Tool[]): Finding | null {
+export function checkTotalToolCount(tools: Tool[]): Finding[] {
   if (tools.length > MAX_TOOLS) {
-    return {
-      severity: "warning",
-      message: `Server exposes ${tools.length} tools. Consider reducing to ${MAX_TOOLS} or fewer for better LLM accuracy`,
-    };
+    return [
+      {
+        ruleId: "too-many-tools",
+        severity: "warning",
+        message: `Server exposes ${tools.length} tools. Consider reducing to ${MAX_TOOLS} or fewer for better LLM accuracy`,
+      },
+    ];
   }
 
-  return null;
+  return [];
 }
 
 const MIN_TOKENS_FOR_COMPARISON = 3;
@@ -344,6 +368,7 @@ export function checkSimilarDescriptions(tools: Tool[]): Finding[] {
       if (similarity >= SIMILARITY_THRESHOLD) {
         const percentage = Math.round(similarity * 100);
         findings.push({
+          ruleId: "similar-descriptions",
           severity: "warning",
           message: `Similar descriptions detected (${percentage}% overlap). Consider making descriptions more distinct to help LLMs differentiate between tools`,
           toolName: `${toolA.name}, ${toolB.name}`,
@@ -356,25 +381,27 @@ export function checkSimilarDescriptions(tools: Tool[]): Finding[] {
 }
 
 export function runCheckers(tools: Tool[]): Finding[] {
-  const perToolFindings = tools
-    .flatMap((tool) => [
-      checkToolDescriptions(tool),
-      ...checkInputDescriptions(tool),
-      checkInputCount(tool),
-      checkDangerousTools(tool),
-      checkOutputSchema(tool as Tool & { outputSchema?: Schema }),
-      checkPiiHandling(tool),
-      checkToolAnnotations(tool),
-    ])
-    .filter((f): f is Finding => f !== null);
+  const perToolCheckers = [
+    checkToolDescriptions,
+    checkInputDescriptions,
+    checkInputCount,
+    checkDangerousTools,
+    checkOutputSchema,
+    checkPiiHandling,
+    checkToolAnnotations,
+  ];
 
-  const serverFindings = [
-    checkDuplicateToolNames(tools),
-    checkTotalToolCount(tools),
-    checkSimilarDescriptions(tools),
-  ]
-    .flat()
-    .filter((f): f is Finding => f !== null);
+  const serverCheckers = [
+    checkDuplicateToolNames,
+    checkTotalToolCount,
+    checkSimilarDescriptions,
+  ];
+
+  const perToolFindings = tools.flatMap((tool) =>
+    perToolCheckers.flatMap((checker) => checker(tool)),
+  );
+
+  const serverFindings = serverCheckers.flatMap((checker) => checker(tools));
 
   return [...serverFindings, ...perToolFindings];
 }

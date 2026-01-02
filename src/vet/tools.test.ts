@@ -13,6 +13,7 @@ import {
   checkPiiHandling,
   checkToolAnnotations,
   tokenize,
+  runCheckers,
 } from "./tools.js";
 import type { Schema } from "../shared/schema.js";
 
@@ -30,11 +31,14 @@ describe("checkToolDescriptions", () => {
 
     const findings = checkToolDescriptions(tool);
 
-    expect(findings).toEqual({
-      severity: "warning",
-      message: "Missing tool description",
-      toolName: "my-tool",
-    });
+    expect(findings).toEqual([
+      {
+        ruleId: "missing-tool-description",
+        severity: "warning",
+        message: "Missing tool description",
+        toolName: "my-tool",
+      },
+    ]);
   });
 
   test("returns no finding when tool has description", () => {
@@ -45,7 +49,7 @@ describe("checkToolDescriptions", () => {
 
     const findings = checkToolDescriptions(tool);
 
-    expect(findings).toBeNull();
+    expect(findings).toEqual([]);
   });
 });
 
@@ -65,6 +69,7 @@ describe("checkInputDescriptions", () => {
 
     expect(findings).toEqual([
       {
+        ruleId: "missing-input-description",
         severity: "warning",
         message: "Missing input description",
         toolName: "my-tool",
@@ -90,18 +95,21 @@ describe("checkInputDescriptions", () => {
 
     expect(findings).toHaveLength(3);
     expect(findings).toContainEqual({
+      ruleId: "missing-input-description",
       severity: "warning",
       message: "Missing input description",
       toolName: "my-tool",
       inputName: "package",
     });
     expect(findings).toContainEqual({
+      ruleId: "missing-input-description",
       severity: "warning",
       message: "Missing input description",
       toolName: "my-tool",
       inputName: "version",
     });
     expect(findings).toContainEqual({
+      ruleId: "missing-input-description",
       severity: "warning",
       message: "Missing input description",
       toolName: "my-tool",
@@ -146,12 +154,15 @@ describe("checkInputCount", () => {
 
     const finding = checkInputCount(tool);
 
-    expect(finding).toEqual({
-      severity: "warning",
-      message:
-        "Too many required inputs (6). Consider reducing to 5 or fewer for better LLM accuracy",
-      toolName: "complex-tool",
-    });
+    expect(finding).toEqual([
+      {
+        ruleId: "too-many-inputs",
+        severity: "warning",
+        message:
+          "Too many required inputs (6). Consider reducing to 5 or fewer for better LLM accuracy",
+        toolName: "complex-tool",
+      },
+    ]);
   });
 
   test("returns no finding when tool has 5 or fewer required inputs", () => {
@@ -169,7 +180,7 @@ describe("checkInputCount", () => {
 
     const finding = checkInputCount(tool);
 
-    expect(finding).toBeNull();
+    expect(finding).toEqual([]);
   });
 
   test("returns no finding when tool has no required inputs", () => {
@@ -185,7 +196,7 @@ describe("checkInputCount", () => {
 
     const finding = checkInputCount(tool);
 
-    expect(finding).toBeNull();
+    expect(finding).toEqual([]);
   });
 });
 
@@ -201,6 +212,7 @@ describe("checkDuplicateToolNames", () => {
 
     expect(findings).toEqual([
       {
+        ruleId: "duplicate-tool-name",
         severity: "error",
         message: "Duplicate tool name (appears 2 times)",
         toolName: "search",
@@ -221,11 +233,13 @@ describe("checkDuplicateToolNames", () => {
 
     expect(findings).toHaveLength(2);
     expect(findings).toContainEqual({
+      ruleId: "duplicate-tool-name",
       severity: "error",
       message: "Duplicate tool name (appears 2 times)",
       toolName: "search",
     });
     expect(findings).toContainEqual({
+      ruleId: "duplicate-tool-name",
       severity: "error",
       message: "Duplicate tool name (appears 3 times)",
       toolName: "fetch",
@@ -262,11 +276,14 @@ describe("checkTotalToolCount", () => {
     const tools = createTools(31);
     const finding = checkTotalToolCount(tools);
 
-    expect(finding).toEqual({
-      severity: "warning",
-      message:
-        "Server exposes 31 tools. Consider reducing to 30 or fewer for better LLM accuracy",
-    });
+    expect(finding).toEqual([
+      {
+        ruleId: "too-many-tools",
+        severity: "warning",
+        message:
+          "Server exposes 31 tools. Consider reducing to 30 or fewer for better LLM accuracy",
+      },
+    ]);
   });
 
   test("returns no finding when server has exactly 30 tools", () => {
@@ -274,7 +291,7 @@ describe("checkTotalToolCount", () => {
 
     const finding = checkTotalToolCount(tools);
 
-    expect(finding).toBeNull();
+    expect(finding).toEqual([]);
   });
 
   test("returns no finding when server has fewer than 30 tools", () => {
@@ -282,13 +299,13 @@ describe("checkTotalToolCount", () => {
 
     const finding = checkTotalToolCount(tools);
 
-    expect(finding).toBeNull();
+    expect(finding).toEqual([]);
   });
 
   test("returns no finding for empty tool list", () => {
     const finding = checkTotalToolCount([]);
 
-    expect(finding).toBeNull();
+    expect(finding).toEqual([]);
   });
 });
 
@@ -330,11 +347,14 @@ describe("checkDangerousTools", () => {
 
     const finding = checkDangerousTools(tool);
 
-    expect(finding).toEqual({
-      severity: "warning",
-      message: `Potentially dangerous tool detected (contains "${expectedWord}")`,
-      toolName,
-    });
+    expect(finding).toEqual([
+      {
+        ruleId: "dangerous-tool",
+        severity: "warning",
+        message: `Potentially dangerous tool detected (contains "${expectedWord}")`,
+        toolName,
+      },
+    ]);
   });
 
   test.each([
@@ -350,7 +370,7 @@ describe("checkDangerousTools", () => {
   ])("returns no finding for safe tool: %s", (toolName) => {
     const tool = createTool({ name: toolName });
 
-    expect(checkDangerousTools(tool)).toBeNull();
+    expect(checkDangerousTools(tool)).toEqual([]);
   });
 });
 
@@ -419,11 +439,14 @@ describe("checkOutputSchema", () => {
 
     const finding = checkOutputSchema(tool);
 
-    expect(finding).toEqual({
-      severity: "info",
-      message: "Missing output schema",
-      toolName: "my-tool",
-    });
+    expect(finding).toEqual([
+      {
+        ruleId: "missing-output-schema",
+        severity: "info",
+        message: "Missing output schema",
+        toolName: "my-tool",
+      },
+    ]);
   });
 
   test("returns no finding when tool has output schema", () => {
@@ -440,7 +463,7 @@ describe("checkOutputSchema", () => {
 
     const finding = checkOutputSchema(tool);
 
-    expect(finding).toBeNull();
+    expect(finding).toEqual([]);
   });
 });
 
@@ -450,12 +473,15 @@ describe("checkToolAnnotations", () => {
 
     const finding = checkToolAnnotations(tool);
 
-    expect(finding).toEqual({
-      severity: "info",
-      message:
-        "Missing tool annotations (readOnlyHint, idempotentHint, openWorldHint, destructiveHint)",
-      toolName: "my-tool",
-    });
+    expect(finding).toEqual([
+      {
+        ruleId: "missing-tool-annotations",
+        severity: "info",
+        message:
+          "Missing tool annotations (readOnlyHint, idempotentHint, openWorldHint, destructiveHint)",
+        toolName: "my-tool",
+      },
+    ]);
   });
 
   test("returns no finding when tool has annotations", () => {
@@ -466,7 +492,7 @@ describe("checkToolAnnotations", () => {
 
     const finding = checkToolAnnotations(tool);
 
-    expect(finding).toBeNull();
+    expect(finding).toEqual([]);
   });
 
   test("returns no finding when tool has empty annotations object", () => {
@@ -474,7 +500,7 @@ describe("checkToolAnnotations", () => {
 
     const finding = checkToolAnnotations(tool);
 
-    expect(finding).toBeNull();
+    expect(finding).toEqual([]);
   });
 });
 
@@ -495,10 +521,11 @@ describe("checkPiiHandling", () => {
 
     const finding = checkPiiHandling(tool);
 
-    expect(finding).not.toBeNull();
-    expect(finding?.severity).toBe("info");
-    expect(finding?.message).toContain("May handle personal data");
-    expect(finding?.message).toContain(expectedWord);
+    expect(finding).not.toEqual([]);
+    expect(finding[0]?.ruleId).toBe("pii-handling");
+    expect(finding[0]?.severity).toBe("info");
+    expect(finding[0]?.message).toContain("May handle personal data");
+    expect(finding[0]?.message).toContain(expectedWord);
   });
 
   test("detects PII in tool description", () => {
@@ -509,9 +536,9 @@ describe("checkPiiHandling", () => {
 
     const finding = checkPiiHandling(tool);
 
-    expect(finding).not.toBeNull();
-    expect(finding?.message).toContain("email");
-    expect(finding?.message).toContain("phone");
+    expect(finding).not.toEqual([]);
+    expect(finding[0]?.message).toContain("email");
+    expect(finding[0]?.message).toContain("phone");
   });
 
   test("detects PII in input property names", () => {
@@ -530,10 +557,10 @@ describe("checkPiiHandling", () => {
 
     const finding = checkPiiHandling(tool);
 
-    expect(finding).not.toBeNull();
-    expect(finding?.message).toContain("email");
-    expect(finding?.message).toContain("phone");
-    expect(finding?.message).toContain("password");
+    expect(finding).not.toEqual([]);
+    expect(finding[0]?.message).toContain("email");
+    expect(finding[0]?.message).toContain("phone");
+    expect(finding[0]?.message).toContain("password");
   });
 
   test("returns unique PII matches only", () => {
@@ -550,8 +577,8 @@ describe("checkPiiHandling", () => {
 
     const finding = checkPiiHandling(tool);
 
-    expect(finding).not.toBeNull();
-    const emailCount = (finding?.message.match(/email/g) || []).length;
+    expect(finding).not.toEqual([]);
+    const emailCount = (finding[0]?.message.match(/email/g) || []).length;
     expect(emailCount).toBe(1);
   });
 
@@ -573,6 +600,42 @@ describe("checkPiiHandling", () => {
       },
     });
 
-    expect(checkPiiHandling(tool)).toBeNull();
+    expect(checkPiiHandling(tool)).toEqual([]);
+  });
+});
+
+describe("runCheckers", () => {
+  test("aggregates findings from per-tool and server-level checkers", () => {
+    const tool1 = createTool({
+      name: "deleteUserEmail", // triggers: dangerous-tool, pii-handling
+      description: "Delete user email from the database", // similar to tool2
+      // no annotations -> triggers: missing-tool-annotations
+      // no outputSchema -> triggers: missing-output-schema
+      inputSchema: {
+        type: "object",
+        properties: {
+          userId: { type: "string" }, // triggers: missing-input-description
+        },
+      },
+    });
+
+    const tool2 = createTool({
+      name: "deleteUserEmail", // triggers: duplicate-tool-name
+      description: "Delete user email address from database", // triggers: similar-descriptions
+    });
+
+    const findings = runCheckers([tool1, tool2]);
+    const ruleIds = findings.map((f) => f.ruleId);
+
+    // Server-level checks
+    expect(ruleIds).toContain("duplicate-tool-name");
+    expect(ruleIds).toContain("similar-descriptions");
+
+    // Per-tool checks
+    expect(ruleIds).toContain("dangerous-tool");
+    expect(ruleIds).toContain("pii-handling");
+    expect(ruleIds).toContain("missing-input-description");
+    expect(ruleIds).toContain("missing-output-schema");
+    expect(ruleIds).toContain("missing-tool-annotations");
   });
 });
