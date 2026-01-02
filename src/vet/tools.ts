@@ -275,6 +275,19 @@ export function checkOutputSchema(
   return null;
 }
 
+export function checkToolAnnotations(tool: Tool): Finding | null {
+  if (!tool.annotations) {
+    return {
+      severity: "info",
+      message:
+        "Missing tool annotations (readOnlyHint, idempotentHint, openWorldHint, destructiveHint)",
+      toolName: tool.name,
+    };
+  }
+
+  return null;
+}
+
 export function checkDuplicateToolNames(tools: Tool[]): Finding[] {
   const seen = new Map<string, number>();
 
@@ -351,6 +364,7 @@ export function runCheckers(tools: Tool[]): Finding[] {
       checkDangerousTools(tool),
       checkOutputSchema(tool as Tool & { outputSchema?: Schema }),
       checkPiiHandling(tool),
+      checkToolAnnotations(tool),
     ])
     .filter((f): f is Finding => f !== null);
 

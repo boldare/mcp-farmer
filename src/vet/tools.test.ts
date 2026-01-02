@@ -11,6 +11,7 @@ import {
   checkSimilarDescriptions,
   checkOutputSchema,
   checkPiiHandling,
+  checkToolAnnotations,
   tokenize,
 } from "./tools.js";
 import type { Schema } from "../shared/schema.js";
@@ -435,6 +436,47 @@ describe("checkOutputSchema", () => {
     } as Tool & { outputSchema: Schema };
 
     const finding = checkOutputSchema(tool);
+
+    expect(finding).toBeNull();
+  });
+});
+
+describe("checkToolAnnotations", () => {
+  test("returns info when tool has no annotations", () => {
+    const tool = { name: "my-tool", description: "Test" } as Tool;
+
+    const finding = checkToolAnnotations(tool);
+
+    expect(finding).toEqual({
+      severity: "info",
+      message:
+        "Missing tool annotations (readOnlyHint, idempotentHint, openWorldHint, destructiveHint)",
+      toolName: "my-tool",
+    });
+  });
+
+  test("returns no finding when tool has annotations", () => {
+    const tool = {
+      name: "my-tool",
+      description: "Test",
+      annotations: {
+        readOnlyHint: true,
+      },
+    } as Tool;
+
+    const finding = checkToolAnnotations(tool);
+
+    expect(finding).toBeNull();
+  });
+
+  test("returns no finding when tool has empty annotations object", () => {
+    const tool = {
+      name: "my-tool",
+      description: "Test",
+      annotations: {},
+    } as Tool;
+
+    const finding = checkToolAnnotations(tool);
 
     expect(finding).toBeNull();
   });
