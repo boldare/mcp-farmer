@@ -26,19 +26,18 @@ Create a new MCP server project.
 Options:
   --name <name>            Server name (required if using CLI args)
   --path <path>            Directory path (defaults to ./<name>)
-  --transport <type>       Transport types: stdio, http, or both (comma-separated)
+  --type <type>            Server type: local or remote (default: remote)
   --http-framework <type>  HTTP framework: native or hono (default: native)
   --package-manager <pm>   Package manager: npm, pnpm, yarn, deno, or bun
   --no-git                 Skip git initialization
-  --deploy <option>        Deployment option: docker (HTTP transport only)
+  --deploy <option>        Deployment option: docker (remote server only)
   --help                   Show this help message
 
 Examples:
   mcp-farmer new
   mcp-farmer new --name my-server
-  mcp-farmer new --name my-server --transport stdio --package-manager bun
-  mcp-farmer new --name my-server --transport http --http-framework hono --deploy docker
-  mcp-farmer new --name my-server --transport stdio,http --package-manager pnpm`);
+  mcp-farmer new --name my-server --type local --package-manager bun
+  mcp-farmer new --name my-server --type remote --http-framework hono --deploy docker`);
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -148,13 +147,11 @@ async function copyPackageJson(
 }
 
 const validPackageManagers = ["npm", "pnpm", "yarn", "deno", "bun"] as const;
-const validTransports = ["stdio", "http"] as const;
+const validServerTypes = ["local", "remote"] as const;
 const validHttpFrameworks = ["native", "hono"] as const;
 const validDeployOptions = ["docker"] as const;
 
-function parseTransports(input: string): string[] {
-  return input.split(",").map((t) => t.trim().toLowerCase());
-}
+type ServerType = (typeof validServerTypes)[number];
 
 export async function newCommand(args: string[]) {
   const { values } = parseArgs({
@@ -162,7 +159,7 @@ export async function newCommand(args: string[]) {
     options: {
       name: { type: "string" },
       path: { type: "string" },
-      transport: { type: "string" },
+      type: { type: "string" },
       "http-framework": { type: "string" },
       "package-manager": { type: "string" },
       "no-git": { type: "boolean", default: false },
@@ -191,17 +188,14 @@ export async function newCommand(args: string[]) {
     process.exit(2);
   }
 
-  if (values.transport) {
-    const transports = parseTransports(values.transport);
-    const invalid = transports.find(
-      (t) => !validTransports.includes(t as (typeof validTransports)[number]),
+  if (
+    values.type &&
+    !validServerTypes.includes(values.type as (typeof validServerTypes)[number])
+  ) {
+    console.error(
+      `Invalid server type: ${values.type}. Valid options: ${validServerTypes.join(", ")}`,
     );
-    if (invalid) {
-      console.error(
-        `Invalid transport: ${invalid}. Valid options: ${validTransports.join(", ")}`,
-      );
-      process.exit(2);
-    }
+    process.exit(2);
   }
 
   if (
@@ -228,20 +222,17 @@ export async function newCommand(args: string[]) {
     process.exit(2);
   }
 
-  // Validate that --deploy and --http-framework require HTTP transport
-  if (values.transport) {
-    const transports = parseTransports(values.transport);
-    if (!transports.includes("http")) {
-      if (values.deploy) {
-        console.error("--deploy requires HTTP transport (--transport http)");
-        process.exit(2);
-      }
-      if (values["http-framework"]) {
-        console.error(
-          "--http-framework requires HTTP transport (--transport http)",
-        );
-        process.exit(2);
-      }
+  // Validate that --deploy and --http-framework require remote server type
+  if (values.type === "local") {
+    if (values.deploy) {
+      console.error("--deploy requires remote server type (--type remote)");
+      process.exit(2);
+    }
+    if (values["http-framework"]) {
+      console.error(
+        "--http-framework requires remote server type (--type remote)",
+      );
+      process.exit(2);
     }
   }
 
@@ -272,21 +263,29 @@ export async function newCommand(args: string[]) {
         });
       },
       language: () => Promise.resolve("typescript"),
-      transports: () => {
-        if (values.transport) {
-          return Promise.resolve(parseTransports(values.transport));
+      serverType: () => {
+        if (values.type) {
+          return Promise.resolve(values.type as ServerType);
         }
-        return p.multiselect({
-          message: "Transport types:",
+        return p.select({
+          message: "Server type:",
           options: [
-            { value: "stdio", label: "stdio" },
-            { value: "http", label: "http" },
+            {
+              value: "remote",
+              label: "Remote",
+              hint: "HTTP transport for hosted servers and stdio transport for local development",
+            },
+            {
+              value: "local",
+              label: "Local",
+              hint: "stdio transport only for local integrations",
+            },
           ],
-          required: true,
+          initialValue: "remote",
         });
       },
       httpFramework: ({ results }) => {
-        if (!results.transports?.includes("http")) {
+        if (results.serverType === "local") {
           return Promise.resolve(undefined);
         }
         if (values["http-framework"]) {
@@ -323,7 +322,7 @@ export async function newCommand(args: string[]) {
         });
       },
       releaseOptions: ({ results }) => {
-        if (!results.transports?.includes("http")) {
+        if (results.serverType === "local") {
           return Promise.resolve([]);
         }
         if (values.deploy) {
@@ -346,7 +345,8 @@ export async function newCommand(args: string[]) {
 
   const name = project.name;
   const path = project.path as string;
-  const transports = project.transports;
+  const serverType = project.serverType as ServerType;
+  const transports = serverType === "local" ? ["stdio"] : ["http", "stdio"];
   const httpFramework = project.httpFramework ?? "native";
   const packageManager = project.packageManager as PackageManager;
   const releaseOptions = (project.releaseOptions ?? []) as string[];
