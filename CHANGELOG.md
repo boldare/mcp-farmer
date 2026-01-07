@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/boldare/mcp-farmer/compare/v1.2.0...v1.3.0) (2026-01-07)
+
+
+### Features
+
+* check if tool has annotation ([04ef256](https://github.com/boldare/mcp-farmer/commit/04ef25667243bf7c2001b2b6a86b4c4f2cbe8b76))
+* simplify new server type flag ([e820d34](https://github.com/boldare/mcp-farmer/commit/e820d34434bbc17f6a84bfe19eb4cebf27306e45))
+
 ## [1.2.0](https://github.com/boldare/mcp-farmer/compare/v1.1.0...v1.2.0) (2025-12-17)
 
 
