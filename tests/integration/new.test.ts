@@ -10,7 +10,7 @@ describe("new command", () => {
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Usage: mcp-farmer new");
       expect(stdout).toContain("--name");
-      expect(stdout).toContain("--transport");
+      expect(stdout).toContain("--type");
       expect(stdout).toContain("--package-manager");
     });
 
@@ -34,17 +34,17 @@ describe("new command", () => {
       expect(stderr).toContain("Invalid package manager");
     });
 
-    test("exits with code 2 for invalid transport", async () => {
+    test("exits with code 2 for invalid server type", async () => {
       const { exitCode, stderr } = await runCli([
         "new",
         "--name",
         "test",
-        "--transport",
+        "--type",
         "invalid",
       ]);
 
       expect(exitCode).toBe(2);
-      expect(stderr).toContain("Invalid transport");
+      expect(stderr).toContain("Invalid server type");
     });
 
     test("exits with code 2 for invalid HTTP framework", async () => {
@@ -52,8 +52,8 @@ describe("new command", () => {
         "new",
         "--name",
         "test",
-        "--transport",
-        "http",
+        "--type",
+        "remote",
         "--http-framework",
         "invalid",
       ]);
@@ -67,8 +67,8 @@ describe("new command", () => {
         "new",
         "--name",
         "test",
-        "--transport",
-        "http",
+        "--type",
+        "remote",
         "--deploy",
         "invalid",
       ]);
