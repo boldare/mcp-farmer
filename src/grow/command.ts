@@ -15,35 +15,116 @@ function shortPath(filePath: string): string {
   return path.basename(filePath);
 }
 
-function formatDiff(additions: number, deletions: number): string {
+function formatDiffStats(additions: number, deletions: number): string {
   const parts: string[] = [];
-  if (additions > 0) parts.push(`+${additions}`);
-  if (deletions > 0) parts.push(`-${deletions}`);
+  if (additions > 0) parts.push(`\x1b[32m+${additions}\x1b[0m`);
+  if (deletions > 0) parts.push(`\x1b[31m-${deletions}\x1b[0m`);
   return parts.length > 0 ? ` (${parts.join(" ")})` : "";
+}
+
+function displayDiffContent(
+  oldText: string | null | undefined,
+  newText: string,
+  filePath: string,
+): void {
+  const displayPath = shortPath(filePath);
+  const oldLines = (oldText || "").split("\n");
+  const newLines = newText.split("\n");
+
+  console.log(`\x1b[36m┌─ ${displayPath} ─┐\x1b[0m`);
+
+  // Collect only changed lines with minimal context
+  const maxLinesToShow = 20;
+  let linesShown = 0;
+
+  for (let i = 0; i < Math.max(oldLines.length, newLines.length); i++) {
+    if (linesShown >= maxLinesToShow) {
+      const remaining = Math.max(oldLines.length, newLines.length) - i;
+      if (remaining > 0) {
+        console.log(`\x1b[2m  ... ${remaining} more lines\x1b[0m`);
+      }
+      break;
+    }
+
+    const oldLine = oldLines[i];
+    const newLine = newLines[i];
+
+    if (oldLine !== newLine) {
+      if (oldLine !== undefined && oldLine !== newLine) {
+        console.log(`\x1b[31m  - ${oldLine}\x1b[0m`);
+        linesShown++;
+      }
+      if (newLine !== undefined) {
+        console.log(`\x1b[32m  + ${newLine}\x1b[0m`);
+        linesShown++;
+      }
+    }
+  }
+
+  console.log(`\x1b[36m└${"─".repeat(displayPath.length + 4)}┘\x1b[0m`);
+}
+
+function displayNewFileContent(newText: string, filePath: string): void {
+  const displayPath = shortPath(filePath);
+  const lines = newText.split("\n").filter((l) => l.trim());
+  const totalLines = newText.split("\n").length;
+
+  console.log(`\x1b[36m┌─ ${displayPath} (new) ─┐\x1b[0m`);
+
+  // Show only first 12 non-empty lines for new files
+  const maxLinesToShow = 12;
+  for (let i = 0; i < Math.min(lines.length, maxLinesToShow); i++) {
+    console.log(`\x1b[32m  + ${lines[i]}\x1b[0m`);
+  }
+
+  if (totalLines > maxLinesToShow) {
+    console.log(
+      `\x1b[2m  ... ${totalLines - maxLinesToShow} more lines\x1b[0m`,
+    );
+  }
+
+  console.log(`\x1b[36m└${"─".repeat(displayPath.length + 10)}┘\x1b[0m`);
 }
 
 interface ActiveTaskLog {
   log: ReturnType<typeof p.taskLog>;
   startTime: number;
+  displayedDiffHash?: string;
+  displayedPath?: string;
 }
 
-interface ToolCallUpdate {
-  kind?: string;
-  title?: string;
-}
+function getToolDisplayTitle(
+  kind: acp.ToolKind | null | undefined,
+  title: string | null | undefined,
+): string {
+  const kindStr = kind?.toString() || "other";
+  const titleLower = title?.toLowerCase() || "";
 
-function getToolDisplayTitle(update: ToolCallUpdate): string {
-  const kind = update.kind?.toString() || "other";
-  const title = update.title?.toLowerCase() || "";
-
-  switch (kind) {
+  switch (kindStr) {
     case "edit":
       return "Writing file...";
     case "read":
-      return title === "list" ? "Listing directory..." : "Reading file...";
+      return titleLower === "list" ? "Listing directory..." : "Reading file...";
     default:
-      return update.title || "Running...";
+      return title || "Running...";
   }
+}
+
+function extractDiffFromContent(
+  content: acp.ToolCallContent[] | null | undefined,
+): (acp.Diff & { type: "diff" }) | undefined {
+  if (!content) return undefined;
+
+  for (const item of content) {
+    if (item.type === "diff") {
+      return item;
+    }
+  }
+  return undefined;
+}
+
+function hashDiff(diff: acp.Diff): string {
+  return `${diff.path}:${diff.newText.length}:${diff.oldText?.length || 0}`;
 }
 
 class CodingClient implements acp.Client {
@@ -100,156 +181,169 @@ class CodingClient implements acp.Client {
   }
 
   async sessionUpdate({ update }: acp.SessionNotification): Promise<void> {
-    switch (update.sessionUpdate) {
-      case "agent_message_chunk":
-        if (update.content.type === "text" && update.content.text.trim()) {
-          process.stdout.write(update.content.text);
-        }
-        break;
+    try {
+      switch (update.sessionUpdate) {
+        case "agent_message_chunk":
+          if (update.content.type === "text" && update.content.text.trim()) {
+            process.stdout.write(update.content.text);
+          }
+          break;
 
-      case "agent_thought_chunk":
-        if (update.content.type === "text" && update.content.text.trim()) {
-          // Use stream for thought chunks with dim styling
-          process.stdout.write(`\x1b[2m${update.content.text}\x1b[0m`);
-        }
-        break;
+        case "agent_thought_chunk":
+          if (update.content.type === "text" && update.content.text.trim()) {
+            // Use stream for thought chunks with dim styling
+            process.stdout.write(`\x1b[2m${update.content.text}\x1b[0m`);
+          }
+          break;
 
-      case "tool_call": {
-        const toolCallId = update.toolCallId;
-        const title = update.title?.toLowerCase() || "";
+        case "tool_call": {
+          const toolCallId = update.toolCallId;
+          const title = update.title?.toLowerCase() || "";
 
-        // Skip task logs for internal meta-operations
-        if (title === "todowrite") {
-          this.suppressedToolCalls.add(toolCallId);
+          // Skip task logs for internal meta-operations
+          if (title === "todowrite") {
+            this.suppressedToolCalls.add(toolCallId);
+            break;
+          }
+
+          const displayTitle = getToolDisplayTitle(update.kind, update.title);
+          const log = p.taskLog({
+            title: displayTitle,
+            limit: 5,
+          });
+
+          this.activeTaskLogs.set(toolCallId, {
+            log,
+            startTime: Date.now(),
+          });
           break;
         }
 
-        const displayTitle = getToolDisplayTitle(update);
-        const log = p.taskLog({
-          title: displayTitle,
-          limit: 5,
-        });
+        case "tool_call_update": {
+          const toolCallId = update.toolCallId;
+          const status = update.status;
+          const kind = update.kind?.toString() || "other";
+          const title = update.title || "";
+          const locations = update.locations || [];
+          const content = update.content;
 
-        this.activeTaskLogs.set(toolCallId, {
-          log,
-          startTime: Date.now(),
-        });
-        break;
-      }
+          // Skip updates for suppressed tool calls
+          if (this.suppressedToolCalls.has(toolCallId)) {
+            if (status === "completed" || status === "failed") {
+              this.suppressedToolCalls.delete(toolCallId);
+            }
+            break;
+          }
 
-      case "tool_call_update": {
-        const toolCallId = update.toolCallId;
-        const status = update.status;
-        const kind = update.kind?.toString() || "other";
-        const title = update.title || "";
-        const locations = update.locations || [];
+          const activeTask = this.activeTaskLogs.get(toolCallId);
 
-        // Skip updates for suppressed tool calls
-        if (this.suppressedToolCalls.has(toolCallId)) {
+          // Handle in_progress updates - show location only if changed
+          if (status === "in_progress" && activeTask) {
+            const firstLocation = locations[0];
+            const currentPath = firstLocation?.path;
+
+            if (currentPath && activeTask.displayedPath !== currentPath) {
+              activeTask.displayedPath = currentPath;
+              activeTask.log.message(shortPath(currentPath));
+            }
+          }
+
+          // Handle completion - show diff and final status
           if (status === "completed" || status === "failed") {
-            this.suppressedToolCalls.delete(toolCallId);
-          }
-          break;
-        }
+            const diff = extractDiffFromContent(content);
+            let diffInfo = "";
+            let displayText = title;
 
-        const activeTask = this.activeTaskLogs.get(toolCallId);
-
-        if (status === "completed" || status === "failed") {
-          // Get file info for edits by extracting diff from content array
-          let diffInfo = "";
-          if (kind === "edit") {
-            const contentArray = update.content as unknown[] | undefined;
-            const diffEntry = contentArray?.find(
-              (c): c is { type: "diff"; newText: string; oldText: string } =>
-                typeof c === "object" &&
-                c !== null &&
-                (c as { type?: string }).type === "diff",
-            );
-
-            if (diffEntry) {
-              const newLines = diffEntry.newText
-                ? diffEntry.newText.split("\n").length
+            if (kind === "edit" && diff) {
+              const currentHash = hashDiff(diff);
+              const newLines = diff.newText.split("\n").length;
+              const oldLines = diff.oldText
+                ? diff.oldText.split("\n").length
                 : 0;
-              const oldLines = diffEntry.oldText
-                ? diffEntry.oldText.split("\n").length
-                : 0;
-              diffInfo = formatDiff(newLines, oldLines);
-            }
-          }
+              diffInfo = formatDiffStats(newLines, oldLines);
+              displayText = shortPath(diff.path);
 
-          // Determine what to show
-          let displayText = title;
-          const firstLocation = locations[0];
-          if (firstLocation?.path) {
-            displayText = shortPath(firstLocation.path);
-          }
-
-          const resultMessage = `${displayText}${diffInfo}`;
-
-          if (activeTask) {
-            if (status === "completed") {
-              activeTask.log.success(resultMessage);
+              // Show diff only if not already displayed
+              if (!activeTask?.displayedDiffHash) {
+                if (diff.oldText) {
+                  displayDiffContent(diff.oldText, diff.newText, diff.path);
+                } else {
+                  displayNewFileContent(diff.newText, diff.path);
+                }
+                if (activeTask) activeTask.displayedDiffHash = currentHash;
+              }
             } else {
-              activeTask.log.error(resultMessage);
+              const firstLocation = locations[0];
+              if (firstLocation?.path) {
+                displayText = shortPath(firstLocation.path);
+              }
             }
-            this.activeTaskLogs.delete(toolCallId);
-          } else {
-            // Fallback if no active task log
-            if (status === "completed") {
+
+            const resultMessage = `${displayText}${diffInfo}`;
+
+            if (activeTask) {
+              if (status === "completed") {
+                activeTask.log.success(resultMessage);
+              } else {
+                activeTask.log.error(resultMessage);
+              }
+              this.activeTaskLogs.delete(toolCallId);
+            } else if (status === "completed") {
               p.log.success(resultMessage);
             } else {
               p.log.error(resultMessage);
             }
           }
-        } else if (status === "in_progress" && activeTask) {
-          // Update the task log with progress info
-          const firstLocation = locations[0];
-          if (firstLocation?.path) {
-            activeTask.log.message(shortPath(firstLocation.path));
-          }
-        }
-        break;
-      }
-
-      case "plan": {
-        const entries = update.entries as {
-          content: string;
-          status: string;
-          priority?: string;
-        }[];
-
-        // Only show plan if there are pending/in_progress items
-        const hasActive = entries.some((e) => e.status !== "completed");
-        if (!hasActive) break;
-
-        // Create a hash to avoid duplicate prints
-        const planHash = entries.map((e) => `${e.status}:${e.content}`).join();
-        if (planHash === this.lastPlanHash) break;
-        this.lastPlanHash = planHash;
-
-        const completed = entries.filter(
-          (e) => e.status === "completed",
-        ).length;
-        const total = entries.length;
-
-        // Build plan display using box
-        const planLines: string[] = [];
-        for (const entry of entries) {
-          const marker =
-            entry.status === "completed"
-              ? "✓"
-              : entry.status === "in_progress"
-                ? "→"
-                : "○";
-          planLines.push(`${marker} ${entry.content}`);
+          break;
         }
 
-        p.box(planLines.join("\n"), `Plan (${completed}/${total})`, {
-          contentAlign: "left",
-          titleAlign: "left",
-        });
-        break;
+        case "plan": {
+          const entries = update.entries;
+          if (!entries || entries.length === 0) break;
+
+          // Only show plan if there are pending/in_progress items
+          const hasActive = entries.some((e) => e.status !== "completed");
+          if (!hasActive) break;
+
+          // Create a hash to avoid duplicate prints
+          const planHash = entries
+            .map((e) => `${e.status}:${e.content}`)
+            .join();
+          if (planHash === this.lastPlanHash) break;
+          this.lastPlanHash = planHash;
+
+          const completed = entries.filter(
+            (e) => e.status === "completed",
+          ).length;
+          const total = entries.length;
+
+          // Compact plan display
+          const planItems = entries
+            .map((entry) => {
+              const marker =
+                entry.status === "completed"
+                  ? "\x1b[32m✓\x1b[0m"
+                  : entry.status === "in_progress"
+                    ? "\x1b[33m→\x1b[0m"
+                    : "\x1b[2m○\x1b[0m";
+              const text =
+                entry.status === "completed"
+                  ? `\x1b[2m${entry.content}\x1b[0m`
+                  : entry.content;
+              return `${marker} ${text}`;
+            })
+            .join("  ");
+
+          console.log(`\x1b[2m[${completed}/${total}]\x1b[0m ${planItems}`);
+          break;
+        }
       }
+    } catch (error) {
+      // Log errors but don't break the connection
+      console.error(
+        `\x1b[31mSession update error:\x1b[0m`,
+        error instanceof Error ? error.message : error,
+      );
     }
   }
 }
