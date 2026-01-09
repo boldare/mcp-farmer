@@ -6,11 +6,8 @@ import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 
 import {
-  fetchOpenApiSpec,
-  extractEndpoints,
-  getSpecVersion,
+  parseOpenApiSpec,
   type OpenAPIOperation,
-  type OpenAPISpec,
   type ResponseField,
 } from "./openapi.js";
 
@@ -303,7 +300,7 @@ export async function growCommand(args: string[]) {
   }
 
   if (args[0] !== "openapi") {
-    p.log.error("Invalid feature given")
+    p.log.error("Invalid feature given");
   }
 
   p.note(
@@ -329,28 +326,16 @@ export async function growCommand(args: string[]) {
   const specSpinner = p.spinner();
   specSpinner.start("Fetching OpenAPI specification...");
 
-  let spec: OpenAPISpec;
-  try {
-    spec = await fetchOpenApiSpec(specPath);
-    specSpinner.stop("OpenAPI specification loaded");
-  } catch (error) {
+  const result = await parseOpenApiSpec(specPath);
+  if (!result.ok) {
     specSpinner.stop("Failed to load OpenAPI specification");
-    const message = error instanceof Error ? error.message : String(error);
-    p.log.error(message);
+    p.log.error(result.error);
     process.exit(1);
   }
+  specSpinner.stop("OpenAPI specification loaded");
 
-  const specVersion = getSpecVersion(spec);
-  if (!specVersion) {
-    p.log.error(
-      "Invalid OpenAPI document: missing 'openapi' or 'swagger' field",
-    );
-    process.exit(1);
-  }
-  const specTitle = spec.info?.title || "Unknown API";
-  p.log.info(`Loaded: ${specTitle} (OpenAPI ${specVersion})`);
-
-  const endpoints = extractEndpoints(spec);
+  const { version, title, endpoints } = result.value;
+  p.log.info(`Loaded: ${title} (OpenAPI ${version})`);
 
   if (endpoints.length === 0) {
     p.log.warn("No endpoints found in the OpenAPI specification.");
@@ -413,9 +398,7 @@ export async function growCommand(args: string[]) {
     endpointsWithMapping.push({
       ...endpoint,
       selectedResponseFields:
-        (selectedFields as string[]).length > 0
-          ? (selectedFields as string[])
-          : undefined,
+        selectedFields.length > 0 ? selectedFields : undefined,
     });
   }
 
@@ -465,7 +448,9 @@ export async function growCommand(args: string[]) {
       mcpServers: [],
     });
 
-    sessionSpinner.stop(`Created new session and will use the ${sessionResult.models.currentModelId}`);
+    sessionSpinner.stop(
+      `Created new session and will use the ${sessionResult.models.currentModelId}`,
+    );
 
     p.note(
       `Generating ${endpointsWithMapping.length} MCP tool(s) from OpenAPI endpoints`,

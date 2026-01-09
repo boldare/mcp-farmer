@@ -7,7 +7,7 @@ export interface ResponseField {
   required: boolean;
 }
 
-export interface ResponseSchema {
+interface ResponseSchema {
   statusCode: string;
   description?: string;
   fields: ResponseField[];
@@ -23,9 +23,6 @@ export interface OpenAPIOperation {
   requestBody?: unknown;
   responses?: ResponseSchema[];
 }
-
-// Infer the spec type from SwaggerParser's return type
-export type OpenAPISpec = Awaited<ReturnType<typeof SwaggerParser.validate>>;
 
 const HTTP_METHODS = [
   "get",
@@ -112,7 +109,9 @@ function extractResponseSchemas(
 
   for (const statusCode of SUCCESS_STATUS_CODES) {
     const response = responses[statusCode];
-    if (!isResponseObject(response)) continue;
+    if (!isResponseObject(response)) {
+      continue;
+    }
 
     let schema: SchemaObject | undefined;
 
@@ -143,54 +142,85 @@ function extractResponseSchemas(
   return schemas;
 }
 
-export async function fetchOpenApiSpec(
+interface ParsedOpenApiSpec {
+  version: string;
+  title: string;
+  endpoints: OpenAPIOperation[];
+}
+
+type ParseResult =
+  | { ok: true; value: ParsedOpenApiSpec }
+  | { ok: false; error: string };
+
+export async function parseOpenApiSpec(
   pathOrUrl: string,
-): Promise<OpenAPISpec> {
-  // SwaggerParser.validate parses, dereferences $refs, and validates the spec
-  return await SwaggerParser.validate(pathOrUrl);
-}
+): Promise<ParseResult> {
+  let spec: Awaited<ReturnType<typeof SwaggerParser.validate>>;
+  try {
+    spec = await SwaggerParser.validate(pathOrUrl);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 
-export function getSpecVersion(spec: OpenAPISpec): string | undefined {
+  let version: string | undefined;
   if ("openapi" in spec) {
-    return spec.openapi;
+    version = spec.openapi;
+  } else if ("swagger" in spec) {
+    version = spec.swagger;
   }
-  if ("swagger" in spec) {
-    return spec.swagger;
-  }
-  return undefined;
-}
 
-export function extractEndpoints(spec: OpenAPISpec): OpenAPIOperation[] {
+  if (!version) {
+    return {
+      ok: false,
+      error: "Invalid OpenAPI document: missing 'openapi' or 'swagger' field",
+    };
+  }
+
+  if (!spec.paths) {
+    return {
+      ok: false,
+      error: "Invalid OpenAPI document: missing 'paths' field",
+    };
+  }
+
   const endpoints: OpenAPIOperation[] = [];
 
-  if (!("paths" in spec) || !spec.paths) {
-    return endpoints;
-  }
-
   for (const [path, pathItem] of Object.entries(spec.paths)) {
-    if (!pathItem) continue;
+    if (!pathItem) {
+      continue;
+    }
 
     for (const method of HTTP_METHODS) {
       const operation = pathItem[method];
-      if (operation && typeof operation === "object") {
-        const responses = extractResponseSchemas(
-          operation.responses as Record<string, unknown>,
-        );
-
-        endpoints.push({
-          method: method.toUpperCase(),
-          path,
-          operationId: operation.operationId,
-          summary: operation.summary,
-          description: operation.description,
-          parameters: operation.parameters as unknown[],
-          requestBody:
-            "requestBody" in operation ? operation.requestBody : undefined,
-          responses: responses.length > 0 ? responses : undefined,
-        });
+      if (!operation || typeof operation !== "object") {
+        continue;
       }
+
+      const responses = extractResponseSchemas(operation.responses);
+
+      endpoints.push({
+        method: method.toUpperCase(),
+        path,
+        operationId: operation.operationId,
+        summary: operation.summary,
+        description: operation.description,
+        parameters: operation.parameters as unknown[],
+        requestBody:
+          "requestBody" in operation ? operation.requestBody : undefined,
+        responses: responses.length > 0 ? responses : undefined,
+      });
     }
   }
 
-  return endpoints;
+  return {
+    ok: true,
+    value: {
+      version,
+      title: spec.info?.title || "Unknown API",
+      endpoints,
+    },
+  };
 }
