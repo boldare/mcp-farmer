@@ -5,11 +5,7 @@ import * as path from "node:path";
 import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 
-import {
-  parseOpenApiSpec,
-  type OpenAPIOperation,
-  type ResponseField,
-} from "./openapi.js";
+import { parseOpenApiSpec, type OpenAPIOperation } from "./openapi.js";
 
 function shortPath(filePath: string): string {
   const cwd = process.cwd();
@@ -368,8 +364,7 @@ export async function growCommand(args: string[]) {
   const endpointsWithMapping: EndpointWithFieldMapping[] = [];
 
   for (const endpoint of selectedEndpoints) {
-    const responseFields = getResponseFields(endpoint);
-
+    const responseFields = endpoint.responses?.[0]?.fields ?? [];
     if (responseFields.length === 0) {
       endpointsWithMapping.push(endpoint);
       continue;
@@ -377,11 +372,23 @@ export async function growCommand(args: string[]) {
 
     p.log.step(`${endpoint.method} ${endpoint.path}`);
 
-    const fieldOptions = responseFields.map((field) => ({
-      value: field.name,
-      label: field.name,
-      hint: formatFieldHint(field),
-    }));
+    const fieldOptions = responseFields.map((field) => {
+      const parts = [field.type];
+
+      if (field.required) {
+        parts.push("required");
+      }
+
+      if (field.description) {
+        parts.push(field.description);
+      }
+
+      return {
+        value: field.name,
+        label: field.name,
+        hint: parts.join(" · "),
+      };
+    });
 
     const selectedFields = await p.multiselect({
       message: "Select response fields to include in the tool output:",
@@ -403,7 +410,7 @@ export async function growCommand(args: string[]) {
   }
 
   const agentSpinner = p.spinner();
-  agentSpinner.start("Starting coding agent...");
+  agentSpinner.start("Starting OpenCode coding agent...");
 
   const agentProcess = spawn("opencode", ["acp"]);
 
@@ -488,7 +495,7 @@ export async function growCommand(args: string[]) {
     console.log(); // Add spacing after agent output
 
     if (promptResult.stopReason === "end_turn") {
-      p.outro("✨ MCP tools generated successfully!");
+      p.outro("MCP tools generated successfully!");
     } else if (promptResult.stopReason === "cancelled") {
       p.cancel("Generation cancelled");
     } else {
@@ -502,23 +509,4 @@ export async function growCommand(args: string[]) {
   } finally {
     agentProcess.kill();
   }
-}
-
-function getResponseFields(endpoint: OpenAPIOperation): ResponseField[] {
-  const firstResponse = endpoint.responses?.[0];
-  if (!firstResponse) {
-    return [];
-  }
-  return firstResponse.fields;
-}
-
-function formatFieldHint(field: ResponseField): string {
-  const parts: string[] = [field.type];
-  if (field.required) {
-    parts.push("required");
-  }
-  if (field.description) {
-    parts.push(field.description);
-  }
-  return parts.join(" · ");
 }

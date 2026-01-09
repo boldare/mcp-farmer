@@ -1,6 +1,6 @@
 import SwaggerParser from "@apidevtools/swagger-parser";
 
-export interface ResponseField {
+interface ResponseField {
   name: string;
   type: string;
   description?: string;
