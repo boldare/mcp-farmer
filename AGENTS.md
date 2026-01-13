@@ -69,6 +69,13 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
   - `openapi.ts` - OpenAPI/Swagger parser: extracts endpoints, parameters, and response schemas
   - `graphql.ts` - GraphQL introspection: fetches schema and extracts queries/mutations with arguments and return types
   - `acp.ts` - ACP client implementation: handles file operations, permissions, and displays agent progress
+- `tests/` - Test files
+  - `integration/` - Integration tests that spawn the CLI
+    - `helpers/spawn.ts` - Helper to spawn CLI process and capture stdout/stderr
+    - `new.test.ts` - Integration tests for the new command
+    - `vet.test.ts` - Integration tests for the vet command
+  - `testdata/` - Test fixtures
+    - `petstore-swagger.json` - Sample OpenAPI spec for testing grow command
 
 ## Vet Command Flow
 
