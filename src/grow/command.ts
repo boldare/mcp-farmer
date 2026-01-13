@@ -220,14 +220,24 @@ export async function growCommand(args: string[]) {
       prompt: [
         {
           type: "text",
-          text: `Your job is to generate MCP tools from the OpenAPI specification. You will be given a list of endpoints and you will need to generate a tool for each endpoint. Follow these instructions:
+          text: `Your job is to generate MCP tools from the OpenAPI specification. You will be given a list of endpoints and you will need to generate a tool for each endpoint.
 
-          - Place each tool in the tools directory as a separate file.
+          ## Steps
+          1. Read current directory to see how the tools are structured and registered in the server instance
+          2. Identify any existing patterns in the codebase to follow
+          4. Confirm no duplicate tool names exist in the codebase
+          5. Generate the tool for each selected endpoint
+          6. Register the tool using the server instance
+
+          ## Rules
+          - Place each tool in the tools directory as a separate file unless there is already another pattern in the project then you should follow it
           - Each function should accept a server instance argument and register the tool using the server instance.
           - You should make a fetch request for each endpoint.
           - You can take the base url from API_BASE_URL environment variable.
-          - For tool input write Zod schema, if any description is provided, use it in the schema if not generate useful but short description.
-          - For tool output use the Zod schema and return only fields that are selected.
+          - Use Zod schema for describing tool input and output.
+          - Every input parameter must have a .describe() in the Zod schema, if not provided from endpoint description use a useful but short description.
+          - Return only fields that are selected in the tool output.
+          - Add tool annotations: { readOnlyHint: true } for GET requests, { destructiveHint: true } for DELETE
 
           <current-directory>
           ${process.cwd()}
