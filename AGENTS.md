@@ -63,6 +63,11 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
   - `servers.ts` - Curated list of popular MCP servers (Chrome DevTools, Playwright, Atlassian, Linear, Context7, Figma)
   - `clients.ts` - List of supported MCP clients (Cursor, VS Code, Claude Desktop, Claude Code) with config paths
   - `command.test.ts` - Unit tests for market command
+- `src/grow/` - Grow command: generate MCP tools from API specifications using AI coding agents
+  - `command.ts` - Grow command logic: interactive prompts for selecting endpoints/operations and fields, spawns coding agent via ACP
+  - `openapi.ts` - OpenAPI/Swagger parser: extracts endpoints, parameters, and response schemas
+  - `graphql.ts` - GraphQL introspection: fetches schema and extracts queries/mutations with arguments and return types
+  - `acp.ts` - ACP client implementation: handles file operations, permissions, and displays agent progress
 
 ## Vet Command Flow
 
@@ -99,3 +104,14 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 4. Prompts user to select a tool
 5. Prompts for input values based on the tool's input schema
 6. Calls the selected tool and displays the result
+
+## Grow Command Flow
+
+1. CLI dispatches to `growCommand()` with feature arg (`openapi` or `graphql`)
+2. Prompts user for API spec path/URL
+3. Parses spec and displays available endpoints/operations
+4. User selects endpoints and response fields to include
+5. User selects a coding agent (OpenCode, Claude Code, or Gemini CLI)
+6. Spawns agent process and connects via ACP (Agent Client Protocol)
+7. Sends prompt with selected endpoints and generation rules
+8. Agent generates MCP tool code following project patterns

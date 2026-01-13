@@ -12,6 +12,7 @@ Commands:
   new          Create a new MCP server project
   market       Browse and install popular MCP servers
   try <url>    Interactively call a tool on an MCP server
+  grow         Generate MCP tools from OpenAPI or GraphQL specs
 
 Options:
   --help       Show this help message
@@ -49,6 +50,15 @@ Browse curated MCP servers and add them to your client config (Claude Code, Clau
 mcp-farmer try http://localhost:3000/mcp              # HTTP
 mcp-farmer try -- npx -y @modelcontextprotocol/server-memory  # Stdio
 ```
+
+### `grow` — Generate MCP tools from API specs
+
+```bash
+mcp-farmer grow openapi   # Generate tools from OpenAPI/Swagger spec
+mcp-farmer grow graphql   # Generate tools from GraphQL endpoint
+```
+
+Parses your API specification, lets you select endpoints/operations and response fields, then uses an AI coding agent (OpenCode, Claude Code, or Gemini CLI) via ACP to generate the MCP tool code.
 
 ### `vet` — Audit MCP server quality
 
