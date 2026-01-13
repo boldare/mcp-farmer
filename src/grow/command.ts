@@ -11,7 +11,7 @@ export interface EndpointWithFieldMapping extends OpenAPIOperation {
   selectedResponseFields?: string[];
 }
 
-type CodingAgent = "opencode" | "claude-code";
+type CodingAgent = "opencode" | "claude-code" | "gemini-cli";
 
 interface AgentConnection {
   connection: acp.ClientSideConnection;
@@ -23,6 +23,8 @@ function spawnAgent(agent: CodingAgent): AgentConnection {
 
   if (agent === "opencode") {
     agentProcess = spawn("opencode", ["acp"]);
+  } else if (agent === "gemini-cli") {
+    agentProcess = spawn("gemini", ["--experimental-acp"]);
   } else {
     // Resolve the path to the local claude-code-acp executable
     const claudeCodePath = fileURLToPath(
@@ -207,6 +209,11 @@ export async function growCommand(args: string[]) {
         label: "Claude Code",
         hint: "claude-code-acp",
       },
+      {
+        value: "gemini-cli" as CodingAgent,
+        label: "Gemini CLI",
+        hint: "gemini --experimental-acp",
+      },
     ],
   });
 
@@ -215,7 +222,13 @@ export async function growCommand(args: string[]) {
     process.exit(0);
   }
 
-  const agentLabel = agentChoice === "opencode" ? "OpenCode" : "Claude Code";
+  const labelMap = {
+    opencode: "OpenCode",
+    "gemini-cli": "Gemini CLI",
+    "claude-code": "Claude Code",
+  };
+
+  const agentLabel = labelMap[agentChoice];
   const agentSpinner = p.spinner();
   agentSpinner.start(`Starting ${agentLabel} coding agent...`);
 
