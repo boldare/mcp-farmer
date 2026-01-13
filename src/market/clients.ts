@@ -75,4 +75,10 @@ export const mcpClients: McpClient[] = [
     path: join(process.cwd(), "opencode.json"),
     hint: "opencode.json",
   },
+  {
+    id: "gemini-cli",
+    displayName: "Gemini CLI",
+    path: join(process.cwd(), ".gemini", "settings.json"),
+    hint: ".gemini/settings.json",
+  },
 ];
