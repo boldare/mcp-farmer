@@ -2,13 +2,15 @@
 
 [![npm version](https://badge.fury.io/js/mcp-farmer.svg)](https://badge.fury.io/js/mcp-farmer)
 
-A CLI tool for scaffolding and analyzing MCP (Model Context Protocol) servers.
+A CLI tool for scaffolding, extending and analyzing MCP (Model Context Protocol) servers.
+
+While this tool is stable and ready to be used you can expect new features and improvements coming soon™.
 
 ```
 Usage: mcp-farmer <command> [options]
 
 Commands:
-  vet <url>    Vet an MCP server by connecting and running checks
+  vet [url]    Vet an MCP server (auto-detects from config if no URL)
   new          Create a new MCP server project
   market       Browse and install popular MCP servers
   try <url>    Interactively call a tool on an MCP server
@@ -64,11 +66,20 @@ Parses your API specification, lets you select endpoints/operations and response
 
 ```bash
 mcp-farmer vet http://localhost:3000/mcp              # HTTP
+mcp-farmer vet                                        # Auto-detect from config
+mcp-farmer vet --config .cursor/mcp.json              # Explicit config file
 mcp-farmer vet -- bunx @playwright/mcp@latest         # Stdio
+```
+
+Printing the report to HTML file
+
+```bash
 mcp-farmer vet -o html -- bunx @playwright/mcp > report.html
 ```
 
-**Options:** `-o, --output json|html`, `--oauth`, `--oauth-port <port>`
+Auto-detects MCP servers from local config files (Cursor, VS Code, Claude Desktop, Claude Code, OpenCode, Gemini CLI). If multiple servers are found, prompts you to select one.
+
+**Options:** `-c, --config <path>`, `-o, --output json|html`, `--oauth`, `--oauth-port <port>`
 
 **Checks:** missing descriptions, missing schemas, too many inputs (>5), too many tools (>30), duplicates, similar descriptions, dangerous tool names.
 
