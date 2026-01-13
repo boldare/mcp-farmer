@@ -28,7 +28,9 @@
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
+    "noPropertyAccessFromIndexSignature": false,
+
+    "erasableSyntaxOnly": true
   },
   "include": ["cli.ts", "src/**/*"],
   "exclude": ["node_modules", "dist", "src/new/templates/**"]
