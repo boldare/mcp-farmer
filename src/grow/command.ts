@@ -1,13 +1,50 @@
 import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { Readable, Writable } from "node:stream";
+import { fileURLToPath } from "node:url";
 
 import { parseOpenApiSpec, type OpenAPIOperation } from "./openapi.js";
 import { CodingClient } from "./acp.js";
 
 export interface EndpointWithFieldMapping extends OpenAPIOperation {
   selectedResponseFields?: string[];
+}
+
+type CodingAgent = "opencode" | "claude-code";
+
+interface AgentConnection {
+  connection: acp.ClientSideConnection;
+  process: ChildProcess;
+}
+
+function spawnAgent(agent: CodingAgent): AgentConnection {
+  let agentProcess: ChildProcess;
+
+  if (agent === "opencode") {
+    agentProcess = spawn("opencode", ["acp"]);
+  } else {
+    // Resolve the path to the local claude-code-acp executable
+    const claudeCodePath = fileURLToPath(
+      import.meta.resolve("@zed-industries/claude-code-acp/dist/index.js"),
+    );
+    agentProcess = spawn(process.execPath, [claudeCodePath]);
+  }
+
+  if (!agentProcess.stdin || !agentProcess.stdout) {
+    throw new Error("Failed to spawn agent process");
+  }
+
+  const input = Writable.toWeb(agentProcess.stdin);
+  const output = Readable.toWeb(
+    agentProcess.stdout,
+  ) as ReadableStream<Uint8Array>;
+
+  const client = new CodingClient();
+  const agentStream = acp.ndJsonStream(input, output);
+  const connection = new acp.ClientSideConnection(() => client, agentStream);
+
+  return { connection, process: agentProcess };
 }
 
 function printHelp() {
@@ -161,25 +198,37 @@ export async function growCommand(args: string[]) {
     });
   }
 
+  const agentChoice = await p.select({
+    message: "Select a coding agent:",
+    options: [
+      { value: "opencode" as CodingAgent, label: "OpenCode", hint: "opencode" },
+      {
+        value: "claude-code" as CodingAgent,
+        label: "Claude Code",
+        hint: "claude-code-acp",
+      },
+    ],
+  });
+
+  if (p.isCancel(agentChoice)) {
+    p.cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  const agentLabel = agentChoice === "opencode" ? "OpenCode" : "Claude Code";
   const agentSpinner = p.spinner();
-  agentSpinner.start("Starting OpenCode coding agent...");
+  agentSpinner.start(`Starting ${agentLabel} coding agent...`);
 
-  const agentProcess = spawn("opencode", ["acp"]);
-
-  if (!agentProcess.stdin || !agentProcess.stdout) {
+  let agent: AgentConnection;
+  try {
+    agent = spawnAgent(agentChoice);
+  } catch {
     agentSpinner.stop("Failed to start agent");
     p.log.error("Failed to spawn agent process");
     process.exit(1);
   }
 
-  const input = Writable.toWeb(agentProcess.stdin);
-  const output = Readable.toWeb(
-    agentProcess.stdout,
-  ) as ReadableStream<Uint8Array>;
-
-  const client = new CodingClient();
-  const agentStream = acp.ndJsonStream(input, output);
-  const connection = new acp.ClientSideConnection(() => client, agentStream);
+  const { connection, process: agentProcess } = agent;
 
   try {
     const initResult = await connection.initialize({

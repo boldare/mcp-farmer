@@ -159,6 +159,15 @@ export class CodingClient implements acp.Client {
   async readTextFile(
     params: acp.ReadTextFileRequest,
   ): Promise<acp.ReadTextFileResponse> {
+    // Check if path is a directory
+    const stat = await fs.stat(params.path);
+    if (stat.isDirectory()) {
+      // Return directory listing instead of throwing
+      const entries = await fs.readdir(params.path);
+      const content = entries.join("\n");
+      return { content };
+    }
+
     const content = await fs.readFile(params.path, "utf8");
     return { content };
   }
