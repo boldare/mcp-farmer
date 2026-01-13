@@ -82,7 +82,7 @@ export async function growCommand(args: string[]) {
   p.intro("Grow MCP Tools");
 
   if (args.length === 0) {
-    p.log.error("Please provide a feature you woud like to grow");
+    p.log.error("Please provide a feature you would like to grow");
     return;
   }
 
@@ -287,9 +287,9 @@ export async function growCommand(args: string[]) {
           ## Steps
           1. Read current directory to see how the tools are structured and registered in the server instance
           2. Identify any existing patterns in the codebase to follow
-          4. Confirm no duplicate tool names exist in the codebase
-          5. Generate the tool for each selected endpoint
-          6. Register the tool using the server instance
+          3. Confirm no duplicate tool names exist in the codebase
+          4. Generate the tool for each selected endpoint
+          5. Register the tool using the server instance
 
           ## Rules
           - Place each tool in the tools directory as a separate file unless there is already another pattern in the project then you should follow it
