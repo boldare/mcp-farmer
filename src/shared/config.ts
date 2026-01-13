@@ -127,7 +127,10 @@ export async function discoverServers(): Promise<McpServerEntry[]> {
   for (const location of locations) {
     if (await fileExists(location.path)) {
       try {
-        const entries = await parseConfigFile(location.path, location.configKey);
+        const entries = await parseConfigFile(
+          location.path,
+          location.configKey,
+        );
         servers.push(...entries);
       } catch {
         // Skip invalid config files
@@ -140,7 +143,10 @@ export async function discoverServers(): Promise<McpServerEntry[]> {
 
 export function serverToVetTarget(
   entry: McpServerEntry,
-): { mode: "http"; url: URL } | { mode: "stdio"; command: string; args: string[] } | null {
+):
+  | { mode: "http"; url: URL }
+  | { mode: "stdio"; command: string; args: string[] }
+  | null {
   const { config } = entry;
 
   // HTTP mode
