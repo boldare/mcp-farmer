@@ -1,5 +1,6 @@
 import { parseArgs } from "util";
 
+import * as p from "@clack/prompts";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
@@ -17,6 +18,12 @@ import { jsonReporter } from "./reporters/json.js";
 import { htmlReporter } from "./reporters/html.js";
 import type { Reporter } from "./reporters/shared.js";
 import type { HealthCheckResult } from "./health.js";
+import {
+  discoverServers,
+  parseConfigFile,
+  serverToVetTarget,
+  type McpServerEntry,
+} from "../shared/config.js";
 
 const reporters = {
   console: consoleReporter,
@@ -97,7 +104,8 @@ async function runVet(
 type OutputFormat = "json" | "html";
 
 function printHelp() {
-  console.log(`Usage: mcp-farmer vet <url> [options]
+  console.log(`Usage: mcp-farmer vet [options]
+       mcp-farmer vet <url> [options]
        mcp-farmer vet [options] -- <command> [args...]
 
 Vet an MCP server by connecting and running checks.
@@ -107,12 +115,17 @@ Arguments:
   command              The command to spawn (stdio mode, after --)
 
 Options:
+  --config <path>      Path to MCP config file (e.g., .cursor/mcp.json)
   --output json|html   Output format (json or html)
   --oauth              Enable OAuth authentication flow (HTTP mode only)
   --oauth-port <port>  Port for OAuth callback server (default: 9876)
   --help               Show this help message
 
 Examples:
+  Auto-detect from config:
+    mcp-farmer vet
+    mcp-farmer vet --config .cursor/mcp.json
+
   HTTP mode:
     mcp-farmer vet http://localhost:3000/mcp
     mcp-farmer vet http://localhost:3000/mcp --output json
@@ -173,12 +186,83 @@ function parseTarget(args: string[]): {
   }
 }
 
+async function selectServerFromEntries(
+  entries: McpServerEntry[],
+): Promise<McpServerEntry | null> {
+  if (entries.length === 0) {
+    return null;
+  }
+
+  if (entries.length === 1) {
+    return entries[0] ?? null;
+  }
+
+  const selection = await p.select({
+    message: "Select an MCP server to vet:",
+    options: entries.map((entry) => ({
+      value: entry,
+      label: entry.name,
+      hint: entry.config.url ?? entry.config.command?.toString(),
+    })),
+  });
+
+  if (p.isCancel(selection)) {
+    p.cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  return selection;
+}
+
+async function resolveTargetFromConfig(
+  configPath: string | undefined,
+): Promise<VetTarget | null> {
+  let entries: McpServerEntry[];
+
+  if (configPath) {
+    try {
+      entries = await parseConfigFile(configPath);
+    } catch (error) {
+      console.error(`Error reading config file: ${configPath}`);
+      if (error instanceof Error) {
+        console.error(error.message);
+      }
+      process.exit(2);
+    }
+  } else {
+    entries = await discoverServers();
+  }
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const selected = await selectServerFromEntries(entries);
+  if (!selected) {
+    return null;
+  }
+
+  const target = serverToVetTarget(selected);
+  if (!target) {
+    console.error(
+      `Cannot vet server "${selected.name}": unsupported configuration`,
+    );
+    process.exit(2);
+  }
+
+  return target;
+}
+
 export async function vetCommand(args: string[]) {
   const { target, remainingArgs } = parseTarget(args);
 
   const { values } = parseArgs({
     args: remainingArgs,
     options: {
+      config: {
+        short: "c",
+        type: "string",
+      },
       output: {
         short: "o",
         type: "string",
@@ -203,8 +287,20 @@ export async function vetCommand(args: string[]) {
     process.exit(0);
   }
 
-  if (!target) {
-    console.error("Error: URL or command is required\n");
+  let resolvedTarget = target;
+
+  if (!resolvedTarget) {
+    resolvedTarget = await resolveTargetFromConfig(values.config);
+  }
+
+  if (!resolvedTarget) {
+    if (values.config) {
+      console.error(`No MCP servers found in config file: ${values.config}\n`);
+    } else {
+      console.error(
+        "Error: No MCP servers found. Provide a URL, command, or config file.\n",
+      );
+    }
     printHelp();
     process.exit(2);
   }
@@ -219,16 +315,18 @@ export async function vetCommand(args: string[]) {
   const outputFormat = values.output as OutputFormat | undefined;
   const reporter = reporters[outputFormat ?? "console"];
 
-  if (target.mode === "stdio") {
+  if (resolvedTarget.mode === "stdio") {
     if (values.oauth) {
       console.error("OAuth is not supported for stdio servers");
       process.exit(2);
     }
 
-    const targetDisplay = [target.command, ...target.args].join(" ");
+    const targetDisplay = [resolvedTarget.command, ...resolvedTarget.args].join(
+      " ",
+    );
     const { client, transport } = await connectStdio(
-      target.command,
-      target.args,
+      resolvedTarget.command,
+      resolvedTarget.args,
     );
 
     await runVet(client, transport, reporter, targetDisplay, null);
@@ -250,15 +348,15 @@ export async function vetCommand(args: string[]) {
     : undefined;
 
   const [connectionResult, healthResult] = await Promise.allSettled([
-    connect(target.url, authProvider),
-    checkHealth(target.url),
+    connect(resolvedTarget.url, authProvider),
+    checkHealth(resolvedTarget.url),
   ]);
 
   if (connectionResult.status === "rejected") {
     const error = connectionResult.reason;
     if (error instanceof AuthenticationRequiredError) {
       const output = reporter({
-        target: target.url.toString(),
+        target: resolvedTarget.url.toString(),
         tools: [],
         resourcesSupported: false,
         promptsSupported: false,
@@ -288,5 +386,11 @@ export async function vetCommand(args: string[]) {
   const health =
     healthResult.status === "fulfilled" ? healthResult.value : null;
 
-  await runVet(client, transport, reporter, target.url.toString(), health);
+  await runVet(
+    client,
+    transport,
+    reporter,
+    resolvedTarget.url.toString(),
+    health,
+  );
 }

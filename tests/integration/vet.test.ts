@@ -24,7 +24,7 @@ describe("vet command", () => {
       const { exitCode, stderr } = await runCli(["vet"]);
 
       expect(exitCode).toBe(2);
-      expect(stderr).toContain("URL or command is required");
+      expect(stderr).toContain("No MCP servers found");
     });
 
     test("exits with code 2 for invalid output format", async () => {
@@ -43,7 +43,7 @@ describe("vet command", () => {
       const { exitCode, stderr } = await runCli(["vet", "not-a-valid-url"]);
 
       expect(exitCode).toBe(2);
-      expect(stderr).toContain("URL or command is required");
+      expect(stderr).toContain("No MCP servers found");
     });
   });
 
@@ -95,7 +95,7 @@ describe("vet command", () => {
       const { exitCode, stderr } = await runCli(["vet", "--"]);
 
       expect(exitCode).toBe(2);
-      expect(stderr).toContain("URL or command is required");
+      expect(stderr).toContain("No MCP servers found");
     });
   });
 });
