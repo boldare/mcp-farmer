@@ -475,7 +475,11 @@ ${JSON.stringify(endpointsWithMapping, null, 2)}
 </endpoints>
 `;
 
-  await runAgentWithPrompt(agentChoice, promptText, endpointsWithMapping.length);
+  await runAgentWithPrompt(
+    agentChoice,
+    promptText,
+    endpointsWithMapping.length,
+  );
 }
 
 async function handleGraphQLFeature(): Promise<void> {
