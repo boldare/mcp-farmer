@@ -2,6 +2,7 @@ import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { log as writeLog } from "./log.js";
 
 export function shortPath(filePath: string): string {
   const cwd = process.cwd();
@@ -130,6 +131,7 @@ export class CodingClient implements acp.Client {
     params: acp.RequestPermissionRequest,
   ): Promise<acp.RequestPermissionResponse> {
     p.log.step(`🔐 Permission requested: ${params.toolCall.title}`);
+    writeLog("permission_requested", params.toolCall.title || undefined);
 
     const response = await p.select({
       message: "Select an action:",
@@ -141,6 +143,7 @@ export class CodingClient implements acp.Client {
     });
 
     if (p.isCancel(response)) {
+      writeLog("permission_cancelled", params.toolCall.title || undefined);
       return {
         outcome: {
           outcome: "cancelled",
@@ -148,6 +151,7 @@ export class CodingClient implements acp.Client {
       };
     }
 
+    writeLog("permission_granted", `${params.toolCall.title}: ${response}`);
     return {
       outcome: {
         outcome: "selected",
@@ -159,24 +163,49 @@ export class CodingClient implements acp.Client {
   async readTextFile(
     params: acp.ReadTextFileRequest,
   ): Promise<acp.ReadTextFileResponse> {
-    // Check if path is a directory
-    const stat = await fs.stat(params.path);
-    if (stat.isDirectory()) {
-      // Return directory listing instead of throwing
-      const entries = await fs.readdir(params.path);
-      const content = entries.join("\n");
-      return { content };
-    }
+    writeLog("read_file_request", `path: ${params.path}`);
 
-    const content = await fs.readFile(params.path, "utf8");
-    return { content };
+    try {
+      // Check if path is a directory
+      const stat = await fs.stat(params.path);
+      if (stat.isDirectory()) {
+        // Return directory listing instead of throwing
+        const entries = await fs.readdir(params.path);
+        const content = entries.join("\n");
+        writeLog(
+          "read_file_success",
+          `directory listing: ${entries.length} entries`,
+        );
+        return { content };
+      }
+
+      const content = await fs.readFile(params.path, "utf8");
+      writeLog("read_file_success", `file: ${content.length} bytes`);
+      return { content };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      writeLog("read_file_error", `${params.path}: ${message}`);
+      throw error;
+    }
   }
 
   async writeTextFile(
     params: acp.WriteTextFileRequest,
   ): Promise<acp.WriteTextFileResponse> {
-    await fs.writeFile(params.path, params.content);
-    return {};
+    writeLog(
+      "write_file_request",
+      `path: ${params.path}, size: ${params.content.length} bytes`,
+    );
+
+    try {
+      await fs.writeFile(params.path, params.content);
+      writeLog("write_file_success", params.path);
+      return {};
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      writeLog("write_file_error", `${params.path}: ${message}`);
+      throw error;
+    }
   }
 
   async sessionUpdate({ update }: acp.SessionNotification): Promise<void> {
@@ -199,6 +228,7 @@ export class CodingClient implements acp.Client {
           break;
       }
     } catch (error) {
+      writeLog("session_update_error", error);
       console.error(
         `\x1b[31mSession update error:\x1b[0m`,
         error instanceof Error ? error.message : error,
@@ -231,20 +261,33 @@ export class CodingClient implements acp.Client {
       return;
     }
 
+    // Log full tool call details for debugging
+    const toolCallDetails = {
+      kind: update.kind,
+      title: update.title,
+      locations: update.locations,
+      rawInput: update.rawInput,
+    };
+    writeLog(
+      "tool_call_started",
+      `${update.title || "unknown"} | ${JSON.stringify(toolCallDetails)}`,
+    );
+
     const displayTitle = getToolDisplayTitle(update.kind, update.title);
-    const log = p.taskLog({
+    const taskLog = p.taskLog({
       title: displayTitle,
       limit: 5,
     });
 
     this.activeTaskLogs.set(toolCallId, {
-      log,
+      log: taskLog,
       startTime: Date.now(),
     });
   }
 
   private handleToolCallUpdate(update: acp.ToolCallUpdate): void {
-    const { toolCallId, status, kind, title, locations, content } = update;
+    const { toolCallId, status, kind, title, locations, content, rawOutput } =
+      update;
     const kindStr = kind?.toString() || "other";
 
     if (this.suppressedToolCalls.has(toolCallId)) {
@@ -294,18 +337,29 @@ export class CodingClient implements acp.Client {
       }
 
       const resultMessage = `${displayText}${diffInfo}`;
+      const errorDetails = rawOutput ? JSON.stringify(rawOutput) : undefined;
 
       if (activeTask) {
         if (status === "completed") {
           activeTask.log.success(resultMessage);
+          writeLog("tool_call_completed", resultMessage);
         } else {
           activeTask.log.error(resultMessage);
+          writeLog(
+            "tool_call_failed",
+            `${resultMessage}${errorDetails ? ` | output: ${errorDetails}` : ""}`,
+          );
         }
         this.activeTaskLogs.delete(toolCallId);
       } else if (status === "completed") {
         p.log.success(resultMessage);
+        writeLog("tool_call_completed", resultMessage);
       } else {
         p.log.error(resultMessage);
+        writeLog(
+          "tool_call_failed",
+          `${resultMessage}${errorDetails ? ` | output: ${errorDetails}` : ""}`,
+        );
       }
     }
   }

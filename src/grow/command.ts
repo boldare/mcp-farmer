@@ -11,6 +11,7 @@ import {
   type GraphQLOperationWithFieldMapping,
 } from "./graphql.js";
 import { CodingClient } from "./acp.js";
+import { log, initLog } from "./log.js";
 
 export interface EndpointWithFieldMapping extends OpenAPIOperation {
   selectedResponseFields?: string[];
@@ -188,9 +189,10 @@ async function runAgentWithPrompt(
   let agent: AgentConnection;
   try {
     agent = spawnAgent(agentChoice);
-  } catch {
+  } catch (error) {
     agentSpinner.stop("Failed to start agent");
     p.log.error("Failed to spawn agent process");
+    log("spawn_agent_failed", error);
     process.exit(1);
   }
 
@@ -210,6 +212,10 @@ async function runAgentWithPrompt(
     agentSpinner.stop(
       `Connected to agent ${initResult.agentInfo.name} ${initResult.agentInfo.version} via ACP protocol`,
     );
+    log(
+      "agent_connected",
+      `${initResult.agentInfo.name} ${initResult.agentInfo.version}`,
+    );
 
     const sessionSpinner = p.spinner();
     sessionSpinner.start("Creating session...");
@@ -222,6 +228,7 @@ async function runAgentWithPrompt(
     sessionSpinner.stop(
       `Created new session and will use the ${sessionResult.models.currentModelId}`,
     );
+    log("session_created", sessionResult.models.currentModelId);
 
     p.note(taskDescription, "Agent Task");
 
@@ -241,15 +248,19 @@ async function runAgentWithPrompt(
 
     if (promptResult.stopReason === "end_turn") {
       p.outro("MCP tools generated successfully!");
+      log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
       p.cancel("Generation cancelled");
+      log("session_completed", "cancelled");
     } else {
       p.log.info(`Agent stopped: ${promptResult.stopReason}`);
       p.outro("Generation complete");
+      log("session_completed", promptResult.stopReason);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     p.log.error(`Agent error: ${message}`);
+    log("agent_error", error);
     process.exit(1);
   } finally {
     agentProcess.kill();
@@ -284,9 +295,11 @@ async function handleOpenApiFeature(): Promise<void> {
   if (!result.ok) {
     specSpinner.stop("Failed to load OpenAPI specification");
     p.log.error(result.error);
+    log("spec_load_failed", result.error);
     process.exit(1);
   }
   specSpinner.stop("OpenAPI specification loaded");
+  log("spec_loaded", `${result.value.title} (OpenAPI ${result.value.version})`);
 
   const { version, title, endpoints } = result.value;
   p.log.info(`Loaded: ${title} (OpenAPI ${version})`);
@@ -312,12 +325,18 @@ async function handleOpenApiFeature(): Promise<void> {
 
   if (p.isCancel(selectedIndices)) {
     p.cancel("Operation cancelled.");
+    log("cancelled", "endpoint selection");
     process.exit(0);
   }
 
   const selectedEndpoints = selectedIndices
     .map((i) => endpoints[i])
     .filter((ep) => ep !== undefined);
+
+  log(
+    "selected_endpoints",
+    selectedEndpoints.map((ep) => `${ep.method} ${ep.path}`).join(", "),
+  );
 
   const endpointsWithMapping: EndpointWithFieldMapping[] = [];
 
@@ -369,8 +388,11 @@ async function handleOpenApiFeature(): Promise<void> {
 
   const agentChoice = await selectCodingAgent();
   if (!agentChoice) {
+    log("cancelled", "agent selection");
     process.exit(0);
   }
+
+  log("selected_agent", agentChoice);
 
   const promptText = `Your job is to generate MCP tools from the OpenAPI specification. You will be given a list of endpoints and you will need to generate a tool for each endpoint.
 
@@ -438,9 +460,11 @@ async function handleGraphQLFeature(): Promise<void> {
   if (!result.ok) {
     schemaSpinner.stop("Failed to load GraphQL schema");
     p.log.error(result.error);
+    log("schema_load_failed", result.error);
     process.exit(1);
   }
   schemaSpinner.stop("GraphQL schema loaded");
+  log("schema_loaded", result.value.title || endpointUrl);
 
   const { queries, mutations, title } = result.value;
   if (title) {
@@ -473,6 +497,7 @@ async function handleGraphQLFeature(): Promise<void> {
 
     if (p.isCancel(selectedQueryIndices)) {
       p.cancel("Operation cancelled.");
+      log("cancelled", "query selection");
       process.exit(0);
     }
 
@@ -482,6 +507,14 @@ async function handleGraphQLFeature(): Promise<void> {
       "Query",
     );
     selectedOperations.push(...selectedQueries);
+
+    if (selectedQueryIndices.length > 0) {
+      const queryNames = selectedQueryIndices
+        .map((i) => queries[i]?.name)
+        .filter(Boolean)
+        .join(", ");
+      log("selected_queries", queryNames);
+    }
   }
 
   // Select mutations
@@ -500,6 +533,7 @@ async function handleGraphQLFeature(): Promise<void> {
 
     if (p.isCancel(selectedMutationIndices)) {
       p.cancel("Operation cancelled.");
+      log("cancelled", "mutation selection");
       process.exit(0);
     }
 
@@ -509,17 +543,29 @@ async function handleGraphQLFeature(): Promise<void> {
       "Mutation",
     );
     selectedOperations.push(...selectedMutations);
+
+    if (selectedMutationIndices.length > 0) {
+      const mutationNames = selectedMutationIndices
+        .map((i) => mutations[i]?.name)
+        .filter(Boolean)
+        .join(", ");
+      log("selected_mutations", mutationNames);
+    }
   }
 
   if (selectedOperations.length === 0) {
     p.log.warn("No operations selected.");
+    log("cancelled", "no operations selected");
     process.exit(0);
   }
 
   const agentChoice = await selectCodingAgent();
   if (!agentChoice) {
+    log("cancelled", "agent selection");
     process.exit(0);
   }
+
+  log("selected_agent", agentChoice);
 
   const promptText = `Your job is to generate MCP tools from the GraphQL schema. You will be given a list of operations (queries and mutations) and you will need to generate a tool for each operation.
 
@@ -561,6 +607,8 @@ export async function growCommand(args: string[]) {
     printHelp();
     process.exit(0);
   }
+
+  initLog();
 
   p.intro("Grow MCP Tools");
 
