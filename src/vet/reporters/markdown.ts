@@ -58,9 +58,11 @@ function renderTool(tool: Tool, findings: Finding[]): string {
   lines.push("");
 
   if (propNames.length === 0) {
-    lines.push("**Inputs:** None");
+    lines.push("#### Inputs");
+    lines.push("");
+    lines.push("None");
   } else {
-    lines.push("**Inputs:**");
+    lines.push("#### Inputs");
     lines.push("");
     lines.push("| Name | Type | Description |");
     lines.push("|------|------|-------------|");
@@ -83,9 +85,11 @@ function renderTool(tool: Tool, findings: Finding[]): string {
     const outputPropNames = Object.keys(outputProps);
 
     if (outputPropNames.length === 0) {
-      lines.push("**Output:** No fields");
+      lines.push("#### Output");
+      lines.push("");
+      lines.push("No fields");
     } else {
-      lines.push("**Output:**");
+      lines.push("#### Output");
       lines.push("");
       lines.push("| Name | Type | Description |");
       lines.push("|------|------|-------------|");
@@ -102,11 +106,15 @@ function renderTool(tool: Tool, findings: Finding[]): string {
   }
 
   if (toolFindings.length > 0) {
-    lines.push("**Issues:**");
+    lines.push("#### Findings");
     lines.push("");
     for (const f of toolFindings) {
       const icon =
-        f.severity === "error" ? "[x]" : f.severity === "warning" ? "[!]" : "[i]";
+        f.severity === "error"
+          ? "[x]"
+          : f.severity === "warning"
+            ? "[!]"
+            : "[i]";
       const inputPart = f.inputName ? `: \`${f.inputName}\`` : "";
       lines.push(`- ${icon} ${f.message}${inputPart}`);
     }
@@ -158,7 +166,7 @@ function renderSummary(
   lines.push(`| Resources | ${resourcesCount} |`);
   lines.push(`| Inputs | ${stats.totalInputs} |`);
   if (healthStatus) lines.push(`| /health | ${healthStatus} |`);
-  if (issues.length > 0) lines.push(`| Issues | ${issues.join(", ")} |`);
+  if (issues.length > 0) lines.push(`| Findings | ${issues.join(", ")} |`);
 
   return lines.join("\n");
 }
