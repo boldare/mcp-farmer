@@ -225,10 +225,64 @@ async function runAgentWithPrompt(
       mcpServers: [],
     });
 
-    sessionSpinner.stop(
-      `Created new session and will use the ${sessionResult.models.currentModelId}`,
-    );
-    log("session_created", sessionResult.models.currentModelId);
+    sessionSpinner.stop("Session created");
+
+    const currentModelId = sessionResult.models?.currentModelId;
+    const availableModels = sessionResult.models?.availableModels;
+
+    if (availableModels && availableModels.length > 0) {
+      const defaultModelId =
+        currentModelId || availableModels[0]?.modelId || "";
+      const defaultModelName =
+        availableModels.find((m: acp.ModelInfo) => m.modelId === currentModelId)
+          ?.name ||
+        currentModelId ||
+        "unknown";
+
+      const modelOptions: { value: string; label: string; hint?: string }[] = [
+        {
+          value: defaultModelId,
+          label: `Use default (${defaultModelName})`,
+          hint: "recommended",
+        },
+        ...availableModels
+          .filter((model: acp.ModelInfo) => model.modelId !== defaultModelId)
+          .map((model: acp.ModelInfo) => ({
+            value: model.modelId,
+            label: model.name,
+          })),
+      ];
+
+      const selectedModel = await p.select({
+        message: "Select a model for this session:",
+        options: modelOptions,
+      });
+
+      if (p.isCancel(selectedModel)) {
+        p.cancel("Operation cancelled.");
+        process.exit(0);
+      }
+
+      if (selectedModel !== currentModelId) {
+        const modelSpinner = p.spinner();
+        modelSpinner.start("Setting session model...");
+
+        await connection.unstable_setSessionModel({
+          modelId: selectedModel,
+          providerId: selectedModel.split("/")[0] || "",
+          sessionId: sessionResult.sessionId,
+        });
+
+        modelSpinner.stop(`Model set to ${selectedModel}`);
+        log("session_model_set", selectedModel);
+      } else {
+        p.log.info(`Using default model: ${currentModelId}`);
+        log("session_created", currentModelId || "unknown");
+      }
+    } else {
+      p.log.info(`Using model: ${currentModelId || "default"}`);
+      log("session_created", currentModelId || "unknown");
+    }
 
     p.note(taskDescription, "Agent Task");
 
