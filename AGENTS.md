@@ -69,6 +69,9 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
   - `openapi.ts` - OpenAPI/Swagger parser: extracts endpoints, parameters, and response schemas
   - `graphql.ts` - GraphQL introspection: fetches schema and extracts queries/mutations with arguments and return types
   - `acp.ts` - ACP client implementation: handles file operations, permissions, and displays agent progress
+- `src/eval/` - Eval command: evaluate MCP tools using AI coding agents
+  - `command.ts` - Eval command logic: connects to MCP server, lists tools, spawns coding agent via ACP with MCP server config, prompts agent to test tools
+  - `acp.ts` - ACP client implementation for eval: tracks tool calls and displays progress
 - `tests/` - Test files
   - `integration/` - Integration tests that spawn the CLI
     - `helpers/spawn.ts` - Helper to spawn CLI process and capture stdout/stderr
@@ -125,3 +128,15 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 6. Spawns agent process and connects via ACP (Agent Client Protocol)
 7. Sends prompt with selected endpoints and generation rules
 8. Agent generates MCP tool code following project patterns
+
+## Eval Command Flow
+
+1. CLI dispatches to `evalCommand()` with args
+2. Parses target: URL, stdio command (after `--`), `--config` flag, or auto-detects from local MCP config files
+3. If multiple servers found in config, prompts user to select one via clack
+4. Connects to MCP server via `connect()` (HTTP) or `connectStdio()` (stdio)
+5. Lists available tools and prompts user to multi-select tools to evaluate
+6. User selects a coding agent (OpenCode, Claude Code, or Gemini CLI)
+7. Spawns agent process and connects via ACP, passing the MCP server as session config
+8. Sends prompt instructing agent to generate test inputs and call each tool
+9. Agent calls tools, captures results, and outputs a markdown evaluation report
