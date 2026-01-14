@@ -16,6 +16,7 @@ import {
   serverToVetTarget,
   type McpServerEntry,
 } from "../shared/config.js";
+import { log, initLog } from "../shared/log.js";
 import { EvalClient } from "./acp.js";
 
 interface StdioTarget {
@@ -331,8 +332,11 @@ async function runEval(
 ): Promise<void> {
   const agentChoice = await selectCodingAgent();
   if (!agentChoice) {
+    log("cancelled", "agent selection");
     process.exit(0);
   }
+
+  log("selected_agent", agentChoice);
 
   const labelMap = {
     opencode: "OpenCode",
@@ -350,19 +354,25 @@ async function runEval(
     const result = spawnAgent(agentChoice);
     agent = result.connection;
     client = result.client;
-  } catch {
+  } catch (error) {
     spinner.stop("Failed to connect");
     p.log.error("Could not start the coding agent. Is it installed?");
+    log("spawn_agent_failed", error);
     process.exit(1);
   }
 
   const { connection, process: agentProcess } = agent;
 
   try {
-    await connection.initialize({
+    const initResult = await connection.initialize({
       protocolVersion: acp.PROTOCOL_VERSION,
       clientCapabilities: {},
     });
+
+    log(
+      "agent_connected",
+      `${initResult.agentInfo.name} ${initResult.agentInfo.version}`,
+    );
 
     const mcpServerConfig = buildMcpServerConfig(target, serverName);
 
@@ -370,6 +380,8 @@ async function runEval(
       cwd: process.cwd(),
       mcpServers: [mcpServerConfig],
     });
+
+    log("session_created", serverName);
 
     spinner.stop(`Connected to ${agentLabel}`);
 
@@ -394,16 +406,20 @@ async function runEval(
     if (promptResult.stopReason === "end_turn") {
       workSpinner.stop(`Evaluated ${tools.length} ${toolWord}`);
       p.outro("Evaluation complete.");
+      log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
       workSpinner.stop("Cancelled");
       p.cancel("Evaluation was cancelled.");
+      log("session_completed", "cancelled");
     } else {
       workSpinner.stop("Complete");
       p.outro("Evaluation complete.");
+      log("session_completed", promptResult.stopReason);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     p.log.error(`Something went wrong: ${message}`);
+    log("agent_error", error);
     process.exit(1);
   } finally {
     agentProcess.kill();
@@ -411,6 +427,8 @@ async function runEval(
 }
 
 export async function evalCommand(args: string[]) {
+  initLog("eval");
+
   const { target, remainingArgs } = parseTarget(args);
 
   const { values } = parseArgs({

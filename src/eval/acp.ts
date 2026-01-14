@@ -1,5 +1,6 @@
 import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
+import { log as writeLog } from "../shared/log.js";
 
 type SpinnerInstance = ReturnType<typeof p.spinner>;
 
@@ -66,6 +67,8 @@ export class EvalClient implements acp.Client {
       this.spinner.stop("Permission required");
     }
 
+    writeLog("permission_requested", params.toolCall.title || undefined);
+
     const response = await p.select({
       message: "Agent needs permission to proceed:",
       options: params.options.map((option) => ({
@@ -76,12 +79,15 @@ export class EvalClient implements acp.Client {
     });
 
     if (p.isCancel(response)) {
+      writeLog("permission_cancelled", params.toolCall.title || undefined);
       return {
         outcome: {
           outcome: "cancelled",
         },
       };
     }
+
+    writeLog("permission_granted", `${params.toolCall.title}: ${response}`);
 
     if (this.spinner) {
       this.spinner.start(formatProgressMessage(this.progress));
@@ -96,13 +102,17 @@ export class EvalClient implements acp.Client {
   }
 
   async sessionUpdate({ update }: acp.SessionNotification): Promise<void> {
-    switch (update.sessionUpdate) {
-      case "tool_call":
-        this.handleToolCall(update);
-        break;
-      case "tool_call_update":
-        this.handleToolCallUpdate(update);
-        break;
+    try {
+      switch (update.sessionUpdate) {
+        case "tool_call":
+          this.handleToolCall(update);
+          break;
+        case "tool_call_update":
+          this.handleToolCallUpdate(update);
+          break;
+      }
+    } catch (error) {
+      writeLog("session_update_error", error);
     }
   }
 
@@ -114,6 +124,8 @@ export class EvalClient implements acp.Client {
       this.suppressedToolCalls.add(toolCallId);
       return;
     }
+
+    writeLog("tool_call_started", update.title || "unknown");
 
     const actionMessage = getActionMessage(update.kind, update.title);
     this.progress.currentAction = actionMessage;
@@ -136,6 +148,9 @@ export class EvalClient implements acp.Client {
         this.progress.toolsCalled++;
       }
       this.updateSpinner();
+      writeLog("tool_call_completed", kindStr);
+    } else if (status === "failed") {
+      writeLog("tool_call_failed", kindStr);
     }
   }
 }

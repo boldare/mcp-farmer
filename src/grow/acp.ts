@@ -1,7 +1,7 @@
 import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
 import * as fs from "node:fs/promises";
-import { log as writeLog } from "./log.js";
+import { log as writeLog } from "../shared/log.js";
 
 type SpinnerInstance = ReturnType<typeof p.spinner>;
 

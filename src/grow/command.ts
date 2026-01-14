@@ -11,7 +11,7 @@ import {
   type GraphQLOperationWithFieldMapping,
 } from "./graphql.js";
 import { CodingClient } from "./acp.js";
-import { log, initLog } from "./log.js";
+import { log, initLog } from "../shared/log.js";
 
 export interface EndpointWithFieldMapping extends OpenAPIOperation {
   selectedResponseFields?: string[];
@@ -677,7 +677,7 @@ export async function growCommand(args: string[]) {
     process.exit(0);
   }
 
-  initLog();
+  initLog("grow");
 
   p.intro("Grow MCP Tools");
 

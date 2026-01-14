@@ -18,12 +18,12 @@ function getLogDir(): string {
   return path.join(stateHome, "mcp-farmer");
 }
 
-function generateLogFilename(): string {
+function generateLogFilename(prefix: string): string {
   const now = new Date();
   const date = now.toISOString().slice(0, 10).replace(/-/g, "");
   const time = now.toISOString().slice(11, 19).replace(/:/g, "");
   const uniqueId = crypto.randomBytes(4).toString("hex");
-  return `grow-${date}-${time}-${uniqueId}.log`;
+  return `${prefix}-${date}-${time}-${uniqueId}.log`;
 }
 
 function ensureLogDir(): void {
@@ -33,9 +33,9 @@ function ensureLogDir(): void {
   }
 }
 
-export function initLog(): string {
+export function initLog(prefix: string): string {
   ensureLogDir();
-  const filename = generateLogFilename();
+  const filename = generateLogFilename(prefix);
   currentLogPath = path.join(getLogDir(), filename);
   return currentLogPath;
 }
