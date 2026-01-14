@@ -24,7 +24,12 @@ interface AgentConnection {
   process: ChildProcess;
 }
 
-function spawnAgent(agent: CodingAgent): AgentConnection {
+interface SpawnResult {
+  connection: AgentConnection;
+  client: CodingClient;
+}
+
+function spawnAgent(agent: CodingAgent): SpawnResult {
   let agentProcess: ChildProcess;
 
   if (agent === "opencode") {
@@ -32,7 +37,6 @@ function spawnAgent(agent: CodingAgent): AgentConnection {
   } else if (agent === "gemini-cli") {
     agentProcess = spawn("gemini", ["--experimental-acp"]);
   } else {
-    // Resolve the path to the local claude-code-acp executable
     const claudeCodePath = fileURLToPath(
       import.meta.resolve("@zed-industries/claude-code-acp/dist/index.js"),
     );
@@ -52,7 +56,10 @@ function spawnAgent(agent: CodingAgent): AgentConnection {
   const agentStream = acp.ndJsonStream(input, output);
   const connection = new acp.ClientSideConnection(() => client, agentStream);
 
-  return { connection, process: agentProcess };
+  return {
+    connection: { connection, process: agentProcess },
+    client,
+  };
 }
 
 function printHelp() {
@@ -174,7 +181,7 @@ async function selectCodingAgent(): Promise<CodingAgent | null> {
 async function runAgentWithPrompt(
   agentChoice: CodingAgent,
   promptText: string,
-  taskDescription: string,
+  toolCount: number,
 ): Promise<void> {
   const labelMap = {
     opencode: "OpenCode",
@@ -183,15 +190,18 @@ async function runAgentWithPrompt(
   };
 
   const agentLabel = labelMap[agentChoice];
-  const agentSpinner = p.spinner();
-  agentSpinner.start(`Starting ${agentLabel} coding agent...`);
+  const spinner = p.spinner();
+  spinner.start(`Connecting to ${agentLabel}...`);
 
   let agent: AgentConnection;
+  let client: CodingClient;
   try {
-    agent = spawnAgent(agentChoice);
+    const result = spawnAgent(agentChoice);
+    agent = result.connection;
+    client = result.client;
   } catch (error) {
-    agentSpinner.stop("Failed to start agent");
-    p.log.error("Failed to spawn agent process");
+    spinner.stop("Failed to connect");
+    p.log.error("Could not start the coding agent. Is it installed?");
     log("spawn_agent_failed", error);
     process.exit(1);
   }
@@ -209,35 +219,30 @@ async function runAgentWithPrompt(
       },
     });
 
-    agentSpinner.stop(
-      `Connected to agent ${initResult.agentInfo.name} ${initResult.agentInfo.version} via ACP protocol`,
-    );
     log(
       "agent_connected",
       `${initResult.agentInfo.name} ${initResult.agentInfo.version}`,
     );
-
-    const sessionSpinner = p.spinner();
-    sessionSpinner.start("Creating session...");
 
     const sessionResult = await connection.newSession({
       cwd: process.cwd(),
       mcpServers: [],
     });
 
-    sessionSpinner.stop("Session created");
-
     const currentModelId = sessionResult.models?.currentModelId;
     const availableModels = sessionResult.models?.availableModels;
+    let selectedModelId = currentModelId;
 
-    if (availableModels && availableModels.length > 0) {
+    spinner.stop(`Connected to ${agentLabel}`);
+
+    if (availableModels && availableModels.length > 1) {
       const defaultModelId =
         currentModelId || availableModels[0]?.modelId || "";
       const defaultModelName =
         availableModels.find((m: acp.ModelInfo) => m.modelId === currentModelId)
           ?.name ||
         currentModelId ||
-        "unknown";
+        "default";
 
       const modelOptions: { value: string; label: string; hint?: string }[] = [
         {
@@ -253,40 +258,34 @@ async function runAgentWithPrompt(
           })),
       ];
 
-      const selectedModel = await p.select({
-        message: "Select a model for this session:",
+      const modelChoice = await p.select({
+        message: "Select a model:",
         options: modelOptions,
       });
 
-      if (p.isCancel(selectedModel)) {
+      if (p.isCancel(modelChoice)) {
         p.cancel("Operation cancelled.");
         process.exit(0);
       }
 
-      if (selectedModel !== currentModelId) {
-        const modelSpinner = p.spinner();
-        modelSpinner.start("Setting session model...");
-
+      if (modelChoice !== currentModelId) {
+        selectedModelId = modelChoice;
         await connection.unstable_setSessionModel({
-          modelId: selectedModel,
-          providerId: selectedModel.split("/")[0] || "",
+          modelId: modelChoice,
+          providerId: modelChoice.split("/")[0] || "",
           sessionId: sessionResult.sessionId,
         });
-
-        modelSpinner.stop(`Model set to ${selectedModel}`);
-        log("session_model_set", selectedModel);
-      } else {
-        p.log.info(`Using default model: ${currentModelId}`);
-        log("session_created", currentModelId || "unknown");
+        log("session_model_set", modelChoice);
       }
-    } else {
-      p.log.info(`Using model: ${currentModelId || "default"}`);
-      log("session_created", currentModelId || "unknown");
     }
 
-    p.note(taskDescription, "Agent Task");
+    log("session_created", selectedModelId || "default");
 
-    console.log();
+    const toolWord = toolCount === 1 ? "tool" : "tools";
+    const workSpinner = p.spinner();
+    workSpinner.start(`Generating ${toolCount} ${toolWord}...`);
+
+    client.setSpinner(workSpinner);
 
     const promptResult = await connection.prompt({
       sessionId: sessionResult.sessionId,
@@ -298,22 +297,22 @@ async function runAgentWithPrompt(
       ],
     });
 
-    console.log();
-
     if (promptResult.stopReason === "end_turn") {
-      p.outro("MCP tools generated successfully!");
+      workSpinner.stop(`Generated ${toolCount} MCP ${toolWord}`);
+      p.outro("Done! Your new tools are ready to use.");
       log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
-      p.cancel("Generation cancelled");
+      workSpinner.stop("Cancelled");
+      p.cancel("Generation was cancelled.");
       log("session_completed", "cancelled");
     } else {
-      p.log.info(`Agent stopped: ${promptResult.stopReason}`);
-      p.outro("Generation complete");
+      workSpinner.stop("Complete");
+      p.outro("Generation complete.");
       log("session_completed", promptResult.stopReason);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    p.log.error(`Agent error: ${message}`);
+    p.log.error(`Something went wrong: ${message}`);
     log("agent_error", error);
     process.exit(1);
   } finally {
@@ -476,11 +475,7 @@ ${JSON.stringify(endpointsWithMapping, null, 2)}
 </endpoints>
 `;
 
-  await runAgentWithPrompt(
-    agentChoice,
-    promptText,
-    `Generating ${endpointsWithMapping.length} MCP tool(s) from OpenAPI endpoints`,
-  );
+  await runAgentWithPrompt(agentChoice, promptText, endpointsWithMapping.length);
 }
 
 async function handleGraphQLFeature(): Promise<void> {
@@ -649,11 +644,7 @@ ${JSON.stringify(selectedOperations, null, 2)}
 </operations>
 `;
 
-  await runAgentWithPrompt(
-    agentChoice,
-    promptText,
-    `Generating ${selectedOperations.length} MCP tool(s) from GraphQL operations`,
-  );
+  await runAgentWithPrompt(agentChoice, promptText, selectedOperations.length);
 }
 
 export async function growCommand(args: string[]) {
