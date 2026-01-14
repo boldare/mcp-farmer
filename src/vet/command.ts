@@ -16,6 +16,7 @@ import { CliOAuthProvider } from "../shared/oauth.js";
 import { consoleReporter } from "./reporters/console.js";
 import { jsonReporter } from "./reporters/json.js";
 import { htmlReporter } from "./reporters/html.js";
+import { markdownReporter } from "./reporters/markdown.js";
 import type { Reporter } from "./reporters/shared.js";
 import type { HealthCheckResult } from "./health.js";
 import {
@@ -29,6 +30,7 @@ const reporters = {
   console: consoleReporter,
   json: jsonReporter,
   html: htmlReporter,
+  markdown: markdownReporter,
 } as const;
 
 async function timed<T>(
@@ -101,7 +103,7 @@ async function runVet(
   }
 }
 
-type OutputFormat = "json" | "html";
+type OutputFormat = "json" | "html" | "markdown";
 
 function printHelp() {
   console.log(`Usage: mcp-farmer vet [options]
@@ -116,7 +118,7 @@ Arguments:
 
 Options:
   --config <path>      Path to MCP config file (e.g., .cursor/mcp.json)
-  --output json|html   Output format (json or html)
+  --output json|html|markdown   Output format (json, html, or markdown)
   --oauth              Enable OAuth authentication flow (HTTP mode only)
   --oauth-port <port>  Port for OAuth callback server (default: 9876)
   --help               Show this help message
@@ -130,6 +132,7 @@ Examples:
     mcp-farmer vet http://localhost:3000/mcp
     mcp-farmer vet http://localhost:3000/mcp --output json
     mcp-farmer vet http://localhost:3000/mcp --output html > report.html
+    mcp-farmer vet http://localhost:3000/mcp --output markdown > report.md
     mcp-farmer vet https://secure-server.com/mcp --oauth
 
   Stdio mode:
@@ -305,9 +308,14 @@ export async function vetCommand(args: string[]) {
     process.exit(2);
   }
 
-  if (values.output && values.output !== "json" && values.output !== "html") {
+  if (
+    values.output &&
+    values.output !== "json" &&
+    values.output !== "html" &&
+    values.output !== "markdown"
+  ) {
     console.error(
-      `Invalid output format: ${values.output}. Use 'json' or 'html'.`,
+      `Invalid output format: ${values.output}. Use 'json', 'html', or 'markdown'.`,
     );
     process.exit(2);
   }
