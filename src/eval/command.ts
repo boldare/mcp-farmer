@@ -1,4 +1,5 @@
 import { parseArgs } from "util";
+import * as path from "node:path";
 import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -254,7 +255,17 @@ function buildMcpServerConfig(
   };
 }
 
-function buildPrompt(tools: Tool[], serverName: string): string {
+function generateReportFilename(serverName: string): string {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const safeName = serverName.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase();
+  return `mcp-eval-${safeName}-${timestamp}.md`;
+}
+
+function buildPrompt(
+  tools: Tool[],
+  serverName: string,
+  reportPath: string,
+): string {
   const toolsJson = JSON.stringify(
     tools.map((t) => ({
       name: t.name,
@@ -276,13 +287,14 @@ function buildPrompt(tools: Tool[], serverName: string): string {
    - Different valid input combinations
 3. Call each tool with the generated test inputs using the MCP tools available to you
 4. Record the results (success/failure and output)
-5. After testing all tools, output a markdown report to stdout
+5. After testing all tools, write the markdown report to the file specified below
 
-## Output Format
+## Report Output
 
-Output a markdown report with this structure:
+Write the evaluation report to: ${reportPath}
 
-\`\`\`markdown
+Use this markdown structure:
+
 # MCP Tool Evaluation Report
 
 ## Summary
@@ -314,7 +326,6 @@ Output a markdown report with this structure:
 |------|-------|--------|--------|
 | tool_name | 3 | 3 | 0 |
 | ... | ... | ... | ... |
-\`\`\`
 
 ## Tools to Evaluate
 
@@ -322,7 +333,7 @@ Output a markdown report with this structure:
 ${toolsJson}
 </tools>
 
-Begin by calling each tool with your generated test inputs, then output the markdown report.`;
+Begin by calling each tool with your generated test inputs, then write the markdown report to ${reportPath}.`;
 }
 
 async function runEval(
@@ -363,6 +374,10 @@ async function runEval(
 
   const { connection, process: agentProcess } = agent;
 
+  const cwd = process.cwd();
+  const reportFilename = generateReportFilename(serverName);
+  const reportPath = path.join(cwd, reportFilename);
+
   try {
     const initResult = await connection.initialize({
       protocolVersion: acp.PROTOCOL_VERSION,
@@ -377,7 +392,7 @@ async function runEval(
     const mcpServerConfig = buildMcpServerConfig(target, serverName);
 
     const sessionResult = await connection.newSession({
-      cwd: process.cwd(),
+      cwd,
       mcpServers: [mcpServerConfig],
     });
 
@@ -391,7 +406,7 @@ async function runEval(
 
     client.setSpinner(workSpinner);
 
-    const promptText = buildPrompt(tools, serverName);
+    const promptText = buildPrompt(tools, serverName, reportPath);
 
     const promptResult = await connection.prompt({
       sessionId: sessionResult.sessionId,
@@ -405,6 +420,7 @@ async function runEval(
 
     if (promptResult.stopReason === "end_turn") {
       workSpinner.stop(`Evaluated ${tools.length} ${toolWord}`);
+      p.log.info(`Report written to: ${reportPath}`);
       p.outro("Evaluation complete.");
       log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
@@ -413,6 +429,7 @@ async function runEval(
       log("session_completed", "cancelled");
     } else {
       workSpinner.stop("Complete");
+      p.log.info(`Report written to: ${reportPath}`);
       p.outro("Evaluation complete.");
       log("session_completed", promptResult.stopReason);
     }
