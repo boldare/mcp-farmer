@@ -1,11 +1,10 @@
-import * as p from "@clack/prompts";
-
 import {
   discoverServers,
   parseConfigFile,
   serverToVetTarget,
   type McpServerEntry,
 } from "./config.js";
+import { select, handleCancel } from "./prompts.js";
 
 export interface StdioTarget {
   mode: "stdio";
@@ -68,21 +67,20 @@ export async function selectServerFromEntries(
     return entries[0] ?? null;
   }
 
-  const selection = await p.select({
-    message,
-    options: entries.map((entry) => ({
-      value: entry,
-      label: entry.name,
-      hint: entry.config.url ?? entry.config.command?.toString(),
-    })),
-  });
+  try {
+    const selection = await select({
+      message,
+      choices: entries.map((entry) => ({
+        value: entry,
+        name: entry.name,
+        description: entry.config.url ?? entry.config.command?.toString(),
+      })),
+    });
 
-  if (p.isCancel(selection)) {
-    p.cancel("Operation cancelled.");
-    process.exit(0);
+    return selection;
+  } catch (error) {
+    handleCancel(error);
   }
-
-  return selection as McpServerEntry;
 }
 
 export async function resolveTargetFromConfig(

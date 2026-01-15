@@ -1,11 +1,9 @@
-import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
 import {
   createPermissionHandler,
   createSessionUpdateHandler,
 } from "../shared/acp.js";
-
-type SpinnerInstance = ReturnType<typeof p.spinner>;
+import { type SpinnerInstance } from "../shared/prompts.js";
 
 interface EvalProgress {
   toolsCalled: number;

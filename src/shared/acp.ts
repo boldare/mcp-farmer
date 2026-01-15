@@ -1,9 +1,15 @@
-import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
 import { spawn, type ChildProcess } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { log } from "./log.js";
+import {
+  select,
+  spinner,
+  cancel,
+  handleCancel,
+  type SpinnerInstance,
+} from "./prompts.js";
 
 export type CodingAgent =
   | "opencode"
@@ -66,21 +72,20 @@ export async function selectCodingAgent(
     "github-copilot-cli",
   ];
 
-  const agentChoice = await p.select({
-    message: "Select a coding agent:",
-    options: agents.map((agent) => ({
-      value: agent,
-      label: AGENT_LABELS[agent],
-      hint: getAgentHint(agent),
-    })),
-  });
+  try {
+    const agentChoice = await select({
+      message: "Select a coding agent:",
+      choices: agents.map((agent) => ({
+        value: agent,
+        name: AGENT_LABELS[agent],
+        description: getAgentHint(agent),
+      })),
+    });
 
-  if (p.isCancel(agentChoice)) {
-    p.cancel("Operation cancelled.");
-    return null;
+    return agentChoice;
+  } catch (error) {
+    handleCancel(error);
   }
-
-  return agentChoice as CodingAgent;
 }
 
 function getAgentHint(agent: CodingAgent): string {
@@ -109,49 +114,48 @@ async function promptModelSelection(
     currentModelId ??
     "default";
 
-  const modelChoice = await p.select({
-    message: "Select a model:",
-    options: [
-      {
-        value: defaultId,
-        label: `Use default (${defaultName})`,
-        hint: "recommended",
-      },
-      ...availableModels
-        .filter((m) => m.modelId !== defaultId)
-        .map((m) => ({ value: m.modelId, label: m.name })),
-    ],
-  });
-
-  if (p.isCancel(modelChoice)) {
-    p.cancel("Operation cancelled.");
-    process.exit(0);
-  }
-
-  if (modelChoice !== currentModelId) {
-    await connection.unstable_setSessionModel({
-      modelId: modelChoice as string,
-      providerId: (modelChoice as string).split("/")[0] || "",
-      sessionId: sessionResult.sessionId,
+  try {
+    const modelChoice = await select({
+      message: "Select a model:",
+      choices: [
+        {
+          value: defaultId,
+          name: `Use default (${defaultName})`,
+          description: "recommended",
+        },
+        ...availableModels
+          .filter((m) => m.modelId !== defaultId)
+          .map((m) => ({ value: m.modelId, name: m.name })),
+      ],
     });
-    log("session_model_set", modelChoice as string);
-  }
 
-  return modelChoice as string;
+    if (modelChoice !== currentModelId) {
+      await connection.unstable_setSessionModel({
+        modelId: modelChoice,
+        providerId: modelChoice.split("/")[0] || "",
+        sessionId: sessionResult.sessionId,
+      });
+      log("session_model_set", modelChoice);
+    }
+
+    return modelChoice;
+  } catch (error) {
+    handleCancel(error);
+  }
 }
 
 // High-level runner that handles connection lifecycle
 export async function connectAgent<TClient extends acp.Client>(
   options: RunAgentOptions<TClient>,
 ): Promise<{ session: AgentSession; client: TClient }> {
-  const spinner = p.spinner();
+  const s = spinner();
   const label = AGENT_LABELS[options.agent];
-  spinner.start(`Connecting to ${label}...`);
+  s.start(`Connecting to ${label}...`);
 
   const agentProcess = spawnAgentProcess(options.agent);
 
   if (!agentProcess.stdin || !agentProcess.stdout) {
-    spinner.stop("Failed to connect");
+    s.stop("Failed to connect");
     throw new Error("Failed to spawn agent process");
   }
 
@@ -179,7 +183,7 @@ export async function connectAgent<TClient extends acp.Client>(
     mcpServers: options.mcpServers ?? [],
   });
 
-  spinner.stop(`Connected to ${label}`);
+  s.stop(`Connected to ${label}`);
 
   let selectedModel: string | undefined;
   if (options.enableModelSelection) {
@@ -205,40 +209,41 @@ export async function connectAgent<TClient extends acp.Client>(
 
 // Shared permission handler that can be mixed into any client
 export function createPermissionHandler(
-  getSpinner: () => ReturnType<typeof p.spinner> | null,
+  getSpinner: () => SpinnerInstance | null,
   getProgressMessage: () => string,
 ) {
   return async function requestPermission(
     params: acp.RequestPermissionRequest,
   ): Promise<acp.RequestPermissionResponse> {
-    const spinner = getSpinner();
-    if (spinner) spinner.stop("Permission required");
+    const currentSpinner = getSpinner();
+    if (currentSpinner) currentSpinner.stop("Permission required");
 
     const title = params.toolCall.title || "Unknown action";
     log("permission_requested", title);
 
-    const response = await p.select({
-      message: `Allow "${title}"?`,
-      options: params.options.map((opt) => ({
-        value: opt.optionId,
-        label: opt.name,
-        hint: opt.kind,
-      })),
-    });
+    try {
+      const response = await select({
+        message: `Allow "${title}"?`,
+        choices: params.options.map((opt) => ({
+          value: opt.optionId,
+          name: opt.name,
+          description: opt.kind,
+        })),
+      });
 
-    if (p.isCancel(response)) {
+      log("permission_granted", `${title}: ${response}`);
+
+      const spinnerAfter = getSpinner();
+      if (spinnerAfter) {
+        spinnerAfter.start(getProgressMessage());
+      }
+
+      return { outcome: { outcome: "selected", optionId: response } };
+    } catch {
       log("permission_cancelled", title);
+      cancel("Operation cancelled.");
       return { outcome: { outcome: "cancelled" } };
     }
-
-    log("permission_granted", `${title}: ${response}`);
-
-    const currentSpinner = getSpinner();
-    if (currentSpinner) {
-      currentSpinner.start(getProgressMessage());
-    }
-
-    return { outcome: { outcome: "selected", optionId: response as string } };
   };
 }
 

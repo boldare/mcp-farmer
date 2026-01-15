@@ -1,5 +1,3 @@
-import * as p from "@clack/prompts";
-
 import { parseOpenApiSpec, type OpenAPIOperation } from "./openapi.js";
 import {
   fetchGraphQLSchema,
@@ -15,6 +13,17 @@ import {
   type CodingAgent,
   AgentSession,
 } from "../shared/acp.js";
+import {
+  input,
+  checkbox,
+  spinner,
+  intro,
+  outro,
+  note,
+  log as promptLog,
+  cancel,
+  handleCancel,
+} from "../shared/prompts.js";
 
 function printHelp() {
   console.log(`Usage: mcp-farmer grow <feature> [options]
@@ -75,34 +84,34 @@ async function selectFieldsForOperations(
       continue;
     }
 
-    p.log.step(`${labelPrefix}: ${op.name}`);
+    promptLog.step(`${labelPrefix}: ${op.name}`);
 
-    const fieldOptions = op.returnFields.map((field) => {
+    const fieldChoices = op.returnFields.map((field) => {
       const parts = [field.type];
       if (field.required) parts.push("required");
       if (field.description) parts.push(field.description);
-      return { value: field.name, label: field.name, hint: parts.join(" · ") };
+      return {
+        value: field.name,
+        name: field.name,
+        description: parts.join(" · "),
+        checked: true,
+      };
     });
 
-    const selectedFields = await p.multiselect({
-      message: "Select output fields to include:",
-      options: fieldOptions,
-      required: false,
-      initialValues: op.returnFields.map((f) => f.name),
-    });
+    try {
+      const selectedFields = await checkbox({
+        message: "Select output fields to include:",
+        choices: fieldChoices,
+      });
 
-    if (p.isCancel(selectedFields)) {
-      p.cancel("Operation cancelled.");
-      process.exit(0);
+      result.push({
+        ...op,
+        selectedReturnFields:
+          selectedFields.length > 0 ? selectedFields : undefined,
+      });
+    } catch (error) {
+      handleCancel(error);
     }
-
-    result.push({
-      ...op,
-      selectedReturnFields:
-        (selectedFields as string[]).length > 0
-          ? (selectedFields as string[])
-          : undefined,
-    });
   }
 
   return result;
@@ -131,7 +140,7 @@ async function runAgentWithPrompt(
     session = result.session;
     client = result.client;
   } catch (error) {
-    p.log.error("Could not start the coding agent. Is it installed?");
+    promptLog.error("Could not start the coding agent. Is it installed?");
     log("spawn_agent_failed", error);
     process.exit(1);
   }
@@ -140,7 +149,7 @@ async function runAgentWithPrompt(
 
   try {
     const toolWord = pluralize("tool", toolCount);
-    const workSpinner = p.spinner();
+    const workSpinner = spinner();
     workSpinner.start(`Generating ${toolCount} ${toolWord}...`);
 
     client.setSpinner(workSpinner);
@@ -157,8 +166,8 @@ async function runAgentWithPrompt(
 
     if (promptResult.stopReason === "end_turn") {
       client.stopSpinner(`Generated ${toolCount} MCP ${toolWord}`);
-      p.outro("Done! Your new tools are ready to use.");
-      p.log.message(
+      outro("Done! Your new tools are ready to use.");
+      promptLog.message(
         `What's next?\n` +
           `  mcp-farmer vet   See a report on your generated tools\n` +
           `  mcp-farmer try   Test your new tools interactively`,
@@ -166,12 +175,12 @@ async function runAgentWithPrompt(
       log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
       client.stopSpinner("Cancelled");
-      p.cancel("Generation was cancelled.");
+      cancel("Generation was cancelled.");
       log("session_completed", "cancelled");
     } else {
       client.stopSpinner("Complete");
-      p.outro("Generation complete.");
-      p.log.message(
+      outro("Generation complete.");
+      promptLog.message(
         `What's next?\n` +
           `  mcp-farmer vet   See a report on your generated tools\n` +
           `  mcp-farmer try   Test your new tools interactively`,
@@ -180,7 +189,7 @@ async function runAgentWithPrompt(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    p.log.error(`Something went wrong: ${message}`);
+    promptLog.error(`Something went wrong: ${message}`);
     log("agent_error", error);
     process.exit(1);
   } finally {
@@ -193,33 +202,33 @@ interface EndpointWithFieldMapping extends OpenAPIOperation {
 }
 
 async function handleOpenApiFeature(): Promise<void> {
-  p.note(
+  note(
     "Provide a path to a local file or a URL to a remote OpenAPI document.\nSupports both JSON and YAML formats.",
     "OpenAPI Source",
   );
 
-  const specPath = await p.text({
-    message: "Path or URL to OpenAPI document:",
-    placeholder: "./openapi.json or https://api.example.com/openapi.json",
-    validate(value) {
-      if (!value || value.trim() === "") {
-        return "Path or URL is required";
-      }
-    },
-  });
-
-  if (p.isCancel(specPath)) {
-    p.cancel("Operation cancelled.");
-    process.exit(0);
+  let specPath: string;
+  try {
+    specPath = await input({
+      message: "Path or URL to OpenAPI document:",
+      validate(value) {
+        if (!value || value.trim() === "") {
+          return "Path or URL is required";
+        }
+        return true;
+      },
+    });
+  } catch (error) {
+    handleCancel(error);
   }
 
-  const specSpinner = p.spinner();
+  const specSpinner = spinner();
   specSpinner.start("Fetching OpenAPI specification...");
 
   const result = await parseOpenApiSpec(specPath);
   if (!result.ok) {
     specSpinner.stop("Failed to load OpenAPI specification");
-    p.log.error(result.error);
+    promptLog.error(result.error);
     log("spec_load_failed", result.error);
     process.exit(1);
   }
@@ -227,34 +236,37 @@ async function handleOpenApiFeature(): Promise<void> {
   log("spec_loaded", `${result.value.title} (OpenAPI ${result.value.version})`);
 
   const { version, title, endpoints } = result.value;
-  p.log.info(`Loaded: ${title} (OpenAPI ${version})`);
+  promptLog.info(`Loaded: ${title} (OpenAPI ${version})`);
 
   if (endpoints.length === 0) {
-    p.log.warn("No endpoints found in the OpenAPI specification.");
+    promptLog.warn("No endpoints found in the OpenAPI specification.");
     process.exit(0);
   }
 
-  p.log.info(`Found ${endpoints.length} endpoint(s)`);
+  promptLog.info(`Found ${endpoints.length} endpoint(s)`);
 
-  const endpointOptions = endpoints.map((endpoint, index) => ({
+  const endpointChoices = endpoints.map((endpoint, index) => ({
     value: index,
-    label: formatEndpointLabel(endpoint),
-    hint: formatEndpointHint(endpoint),
+    name: formatEndpointLabel(endpoint),
+    description: formatEndpointHint(endpoint),
   }));
 
-  const selectedIndices = await p.multiselect({
-    message: "Select endpoints to generate tools for:",
-    options: endpointOptions,
-    required: true,
-  });
+  let selectedIndices: number[];
+  try {
+    selectedIndices = await checkbox({
+      message: "Select endpoints to generate tools for:",
+      choices: endpointChoices,
+    });
 
-  if (p.isCancel(selectedIndices)) {
-    p.cancel("Operation cancelled.");
-    log("cancelled", "endpoint selection");
-    process.exit(0);
+    if (selectedIndices.length === 0) {
+      cancel("At least one endpoint must be selected.");
+      process.exit(0);
+    }
+  } catch (error) {
+    handleCancel(error);
   }
 
-  const selectedEndpoints = (selectedIndices as number[])
+  const selectedEndpoints = selectedIndices
     .map((i) => endpoints[i])
     .filter((ep): ep is OpenAPIOperation => ep !== undefined);
 
@@ -272,9 +284,9 @@ async function handleOpenApiFeature(): Promise<void> {
       continue;
     }
 
-    p.log.step(`${endpoint.method} ${endpoint.path}`);
+    promptLog.step(`${endpoint.method} ${endpoint.path}`);
 
-    const fieldOptions = responseFields.map((field) => {
+    const fieldChoices = responseFields.map((field) => {
       const parts = [field.type];
 
       if (field.required) {
@@ -287,30 +299,26 @@ async function handleOpenApiFeature(): Promise<void> {
 
       return {
         value: field.name,
-        label: field.name,
-        hint: parts.join(" · "),
+        name: field.name,
+        description: parts.join(" · "),
+        checked: true,
       };
     });
 
-    const selectedFields = await p.multiselect({
-      message: "Select response fields to include in the tool output:",
-      options: fieldOptions,
-      required: false,
-      initialValues: responseFields.map((f) => f.name),
-    });
+    try {
+      const selectedFields = await checkbox({
+        message: "Select response fields to include in the tool output:",
+        choices: fieldChoices,
+      });
 
-    if (p.isCancel(selectedFields)) {
-      p.cancel("Operation cancelled.");
-      process.exit(0);
+      endpointsWithMapping.push({
+        ...endpoint,
+        selectedResponseFields:
+          selectedFields.length > 0 ? selectedFields : undefined,
+      });
+    } catch (error) {
+      handleCancel(error);
     }
-
-    endpointsWithMapping.push({
-      ...endpoint,
-      selectedResponseFields:
-        (selectedFields as string[]).length > 0
-          ? (selectedFields as string[])
-          : undefined,
-    });
   }
 
   const agentChoice = await selectCodingAgent();
@@ -357,36 +365,36 @@ ${JSON.stringify(endpointsWithMapping, null, 2)}
 }
 
 async function handleGraphQLFeature(): Promise<void> {
-  p.note(
+  note(
     "Provide a URL to a GraphQL endpoint.\nIntrospection will be used to fetch the schema.",
     "GraphQL Source",
   );
 
-  const endpointUrl = await p.text({
-    message: "GraphQL endpoint URL:",
-    placeholder: "https://api.example.com/graphql",
-    validate(value) {
-      if (!value || value.trim() === "") {
-        return "URL is required";
-      }
-      if (!value.startsWith("http://") && !value.startsWith("https://")) {
-        return "URL must start with http:// or https://";
-      }
-    },
-  });
-
-  if (p.isCancel(endpointUrl)) {
-    p.cancel("Operation cancelled.");
-    process.exit(0);
+  let endpointUrl: string;
+  try {
+    endpointUrl = await input({
+      message: "GraphQL endpoint URL:",
+      validate(value) {
+        if (!value || value.trim() === "") {
+          return "URL is required";
+        }
+        if (!value.startsWith("http://") && !value.startsWith("https://")) {
+          return "URL must start with http:// or https://";
+        }
+        return true;
+      },
+    });
+  } catch (error) {
+    handleCancel(error);
   }
 
-  const schemaSpinner = p.spinner();
+  const schemaSpinner = spinner();
   schemaSpinner.start("Fetching GraphQL schema via introspection...");
 
   const result = await fetchGraphQLSchema(endpointUrl);
   if (!result.ok) {
     schemaSpinner.stop("Failed to load GraphQL schema");
-    p.log.error(result.error);
+    promptLog.error(result.error);
     log("schema_load_failed", result.error);
     process.exit(1);
   }
@@ -395,14 +403,14 @@ async function handleGraphQLFeature(): Promise<void> {
 
   const { queries, mutations, title } = result.value;
   if (title) {
-    p.log.info(`Loaded: ${title}`);
+    promptLog.info(`Loaded: ${title}`);
   }
-  p.log.info(
+  promptLog.info(
     `Found ${queries.length} query(ies) and ${mutations.length} mutation(s)`,
   );
 
   if (queries.length === 0 && mutations.length === 0) {
-    p.log.warn("No queries or mutations found in the GraphQL schema.");
+    promptLog.warn("No queries or mutations found in the GraphQL schema.");
     process.exit(0);
   }
 
@@ -410,78 +418,72 @@ async function handleGraphQLFeature(): Promise<void> {
 
   // Select queries
   if (queries.length > 0) {
-    const queryOptions = queries.map((query, index) => ({
+    const queryChoices = queries.map((query, index) => ({
       value: index,
-      label: formatOperationLabel(query),
-      hint: formatOperationHint(query),
+      name: formatOperationLabel(query),
+      description: formatOperationHint(query),
     }));
 
-    const selectedQueryIndices = await p.multiselect({
-      message: "Select queries to generate tools for:",
-      options: queryOptions,
-      required: false,
-    });
+    try {
+      const selectedQueryIndices = await checkbox({
+        message: "Select queries to generate tools for:",
+        choices: queryChoices,
+      });
 
-    if (p.isCancel(selectedQueryIndices)) {
-      p.cancel("Operation cancelled.");
-      log("cancelled", "query selection");
-      process.exit(0);
-    }
+      const selectedQueries = await selectFieldsForOperations(
+        queries,
+        selectedQueryIndices,
+        "Query",
+      );
+      selectedOperations.push(...selectedQueries);
 
-    const selectedQueries = await selectFieldsForOperations(
-      queries,
-      selectedQueryIndices as number[],
-      "Query",
-    );
-    selectedOperations.push(...selectedQueries);
-
-    if ((selectedQueryIndices as number[]).length > 0) {
-      const queryNames = (selectedQueryIndices as number[])
-        .map((i) => queries[i]?.name)
-        .filter(Boolean)
-        .join(", ");
-      log("selected_queries", queryNames);
+      if (selectedQueryIndices.length > 0) {
+        const queryNames = selectedQueryIndices
+          .map((i) => queries[i]?.name)
+          .filter(Boolean)
+          .join(", ");
+        log("selected_queries", queryNames);
+      }
+    } catch (error) {
+      handleCancel(error);
     }
   }
 
   // Select mutations
   if (mutations.length > 0) {
-    const mutationOptions = mutations.map((mutation, index) => ({
+    const mutationChoices = mutations.map((mutation, index) => ({
       value: index,
-      label: formatOperationLabel(mutation),
-      hint: formatOperationHint(mutation),
+      name: formatOperationLabel(mutation),
+      description: formatOperationHint(mutation),
     }));
 
-    const selectedMutationIndices = await p.multiselect({
-      message: "Select mutations to generate tools for:",
-      options: mutationOptions,
-      required: false,
-    });
+    try {
+      const selectedMutationIndices = await checkbox({
+        message: "Select mutations to generate tools for:",
+        choices: mutationChoices,
+      });
 
-    if (p.isCancel(selectedMutationIndices)) {
-      p.cancel("Operation cancelled.");
-      log("cancelled", "mutation selection");
-      process.exit(0);
-    }
+      const selectedMutations = await selectFieldsForOperations(
+        mutations,
+        selectedMutationIndices,
+        "Mutation",
+      );
+      selectedOperations.push(...selectedMutations);
 
-    const selectedMutations = await selectFieldsForOperations(
-      mutations,
-      selectedMutationIndices as number[],
-      "Mutation",
-    );
-    selectedOperations.push(...selectedMutations);
-
-    if ((selectedMutationIndices as number[]).length > 0) {
-      const mutationNames = (selectedMutationIndices as number[])
-        .map((i) => mutations[i]?.name)
-        .filter(Boolean)
-        .join(", ");
-      log("selected_mutations", mutationNames);
+      if (selectedMutationIndices.length > 0) {
+        const mutationNames = selectedMutationIndices
+          .map((i) => mutations[i]?.name)
+          .filter(Boolean)
+          .join(", ");
+        log("selected_mutations", mutationNames);
+      }
+    } catch (error) {
+      handleCancel(error);
     }
   }
 
   if (selectedOperations.length === 0) {
-    p.log.warn("No operations selected.");
+    promptLog.warn("No operations selected.");
     log("cancelled", "no operations selected");
     process.exit(0);
   }
@@ -533,10 +535,10 @@ export async function growCommand(args: string[]) {
 
   initLog("grow");
 
-  p.intro("Grow MCP Tools");
+  intro("Grow MCP Tools");
 
   if (args.length === 0) {
-    p.log.error("Please provide a feature you would like to grow");
+    promptLog.error("Please provide a feature you would like to grow");
     process.exit(1);
   }
 
@@ -547,7 +549,7 @@ export async function growCommand(args: string[]) {
   } else if (feature === "graphql") {
     await handleGraphQLFeature();
   } else {
-    p.log.error(
+    promptLog.error(
       `Invalid feature: ${feature}. Valid features are: openapi, graphql`,
     );
     process.exit(1);

@@ -1,4 +1,3 @@
-import * as p from "@clack/prompts";
 import { parseArgs } from "node:util";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +5,18 @@ import { spawn } from "node:child_process";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 
 import { fileExists } from "../shared/config.js";
+import {
+  input,
+  select,
+  checkbox,
+  confirm,
+  spinner,
+  intro,
+  outro,
+  log,
+  cancel,
+  handleCancel,
+} from "../shared/prompts.js";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "deno" | "bun";
 
@@ -229,132 +240,137 @@ export async function newCommand(args: string[]) {
     }
   }
 
-  p.intro("Create a new MCP server");
+  intro("Create a new MCP server");
 
-  const project = await p.group(
-    {
-      name: () => {
-        if (values.name) return Promise.resolve(values.name);
-        return p.text({
-          message: "Server name:",
-          placeholder: "my-mcp-server",
-          validate(value) {
-            if (!value) return "Name is required";
-          },
-        });
-      },
-      path: ({ results }) => {
-        if (values.path) return Promise.resolve(values.path);
-        const defaultPath = `./${results.name}`;
-        return p.text({
-          message: "Directory path:",
-          placeholder: defaultPath,
-          initialValue: defaultPath,
-          validate(value) {
-            if (!value) return "Path is required";
-          },
-        });
-      },
-      language: () => Promise.resolve("typescript"),
-      serverType: () => {
-        if (values.type) {
-          return Promise.resolve(values.type as ServerType);
-        }
-        return p.select({
-          message: "Server type:",
-          options: [
-            {
-              value: "remote",
-              label: "Remote",
-              hint: "HTTP transport for hosted servers and stdio transport for local development",
-            },
-            {
-              value: "local",
-              label: "Local",
-              hint: "stdio transport only for local integrations",
-            },
-          ],
-          initialValue: "remote",
-        });
-      },
-      httpFramework: ({ results }) => {
-        if (results.serverType === "local") {
-          return Promise.resolve(undefined);
-        }
-        if (values["http-framework"]) {
-          return Promise.resolve(values["http-framework"]);
-        }
-        return p.select({
-          message: "HTTP framework:",
-          options: [
-            { value: "native", label: "Native Node.js HTTP" },
-            { value: "hono", label: "Hono" },
-          ] as const,
-        });
-      },
-      packageManager: () => {
-        if (values["package-manager"]) {
-          return Promise.resolve(values["package-manager"]);
-        }
-        return p.select({
-          message: "Package manager:",
-          options: [
-            { value: "npm", label: "npm" },
-            { value: "pnpm", label: "pnpm" },
-            { value: "yarn", label: "yarn" },
-            { value: "deno", label: "deno" },
-            { value: "bun", label: "bun" },
-          ] as const,
-        });
-      },
-      initGit: () => {
-        if (values["no-git"]) return Promise.resolve(false);
-        return p.confirm({
-          message: "Initialize a git repository?",
-          initialValue: true,
-        });
-      },
-      releaseOptions: ({ results }) => {
-        if (results.serverType === "local") {
-          return Promise.resolve([]);
-        }
-        if (values.deploy) {
-          return Promise.resolve([values.deploy]);
-        }
-        return p.multiselect({
-          message: "Release options (optional):",
-          options: [{ value: "docker", label: "Dockerfile" }],
-          required: false,
-        });
-      },
-    },
-    {
-      onCancel: () => {
-        p.cancel("Operation cancelled.");
-        process.exit(0);
-      },
-    },
-  );
+  let name: string;
+  let projectPath: string;
+  let serverType: ServerType;
+  let httpFramework: string | undefined;
+  let packageManager: PackageManager;
+  let initGit: boolean;
+  let releaseOptions: string[];
 
-  const name = project.name;
-  const path = project.path as string;
-  const serverType = project.serverType as ServerType;
+  try {
+    // Name prompt
+    if (values.name) {
+      name = values.name;
+    } else {
+      name = await input({
+        message: "Server name:",
+        validate(value) {
+          if (!value) return "Name is required";
+          return true;
+        },
+      });
+    }
+
+    // Path prompt
+    if (values.path) {
+      projectPath = values.path;
+    } else {
+      const defaultPath = `./${name}`;
+      projectPath = await input({
+        message: "Directory path:",
+        default: defaultPath,
+        validate(value) {
+          if (!value) return "Path is required";
+          return true;
+        },
+      });
+    }
+
+    // Server type prompt
+    if (values.type) {
+      serverType = values.type as ServerType;
+    } else {
+      serverType = await select({
+        message: "Server type:",
+        default: "remote",
+        choices: [
+          {
+            value: "remote" as const,
+            name: "Remote",
+            description:
+              "HTTP transport for hosted servers and stdio transport for local development",
+          },
+          {
+            value: "local" as const,
+            name: "Local",
+            description: "stdio transport only for local integrations",
+          },
+        ],
+      });
+    }
+
+    // HTTP framework prompt (only for remote servers)
+    if (serverType === "local") {
+      httpFramework = undefined;
+    } else if (values["http-framework"]) {
+      httpFramework = values["http-framework"];
+    } else {
+      httpFramework = await select({
+        message: "HTTP framework:",
+        choices: [
+          { value: "native", name: "Native Node.js HTTP" },
+          { value: "hono", name: "Hono" },
+        ],
+      });
+    }
+
+    // Package manager prompt
+    if (values["package-manager"]) {
+      packageManager = values["package-manager"] as PackageManager;
+    } else {
+      packageManager = await select({
+        message: "Package manager:",
+        choices: [
+          { value: "npm" as const, name: "npm" },
+          { value: "pnpm" as const, name: "pnpm" },
+          { value: "yarn" as const, name: "yarn" },
+          { value: "deno" as const, name: "deno" },
+          { value: "bun" as const, name: "bun" },
+        ],
+      });
+    }
+
+    // Git init prompt
+    if (values["no-git"]) {
+      initGit = false;
+    } else {
+      initGit = await confirm({
+        message: "Initialize a git repository?",
+        default: true,
+      });
+    }
+
+    // Release options prompt (only for remote servers)
+    if (serverType === "local") {
+      releaseOptions = [];
+    } else if (values.deploy) {
+      releaseOptions = [values.deploy];
+    } else {
+      releaseOptions = await checkbox({
+        message: "Release options (optional):",
+        choices: [{ value: "docker", name: "Dockerfile" }],
+      });
+    }
+  } catch (error) {
+    handleCancel(error);
+  }
+
   const transports = serverType === "local" ? ["stdio"] : ["http", "stdio"];
-  const httpFramework = project.httpFramework ?? "native";
-  const packageManager = project.packageManager as PackageManager;
-  const releaseOptions = (project.releaseOptions ?? []) as string[];
 
-  const targetDir = join(process.cwd(), path);
+  const targetDir = join(process.cwd(), projectPath);
 
   const projectExists = await fileExists(join(targetDir, "package.json"));
   if (projectExists) {
-    p.cancel(
-      `Directory ${path} already contains a project (package.json exists).`,
+    cancel(
+      `Directory ${projectPath} already contains a project (package.json exists).`,
     );
     process.exit(1);
   }
 
-  const s = p.spinner();
+  const s = spinner();
 
   await mkdir(targetDir, { recursive: true });
   const srcDir = join(targetDir, "src");
@@ -367,9 +383,11 @@ export async function newCommand(args: string[]) {
   s.start("Creating project files");
 
   try {
+    const resolvedHttpFramework = httpFramework ?? "native";
     const httpTemplate =
-      httpFramework === "hono" ? "src/http-hono.ts" : "src/http.ts";
-    const useHono = transports.includes("http") && httpFramework === "hono";
+      resolvedHttpFramework === "hono" ? "src/http-hono.ts" : "src/http.ts";
+    const useHono =
+      transports.includes("http") && resolvedHttpFramework === "hono";
 
     const scripts = buildPackageJsonScripts(packageManager, transports);
 
@@ -464,7 +482,7 @@ docker run -p 3000:3000 ${name}
     process.exit(1);
   }
 
-  if (project.initGit) {
+  if (initGit) {
     s.start("Initializing git repository");
 
     try {
@@ -493,15 +511,15 @@ docker run -p 3000:3000 ${name}
       ? `Run your server:\n${runCommands.map((cmd) => `  ${cmd}`).join("\n")}\n\n`
       : "";
 
-  p.outro(
+  outro(
     `Your MCP server is ready!\n\n` +
-      `  cd ${path}\n` +
+      `  cd ${projectPath}\n` +
       `  ${installCommand}\n\n` +
       runInstructions +
       `Note: Requires Node.js 20+`,
   );
 
-  p.log.message(
+  log.message(
     `What's next?\n` +
       `  mcp-farmer grow openapi   Generate tools from OpenAPI/Swagger spec\n` +
       `  mcp-farmer grow graphql   Generate tools from GraphQL endpoint\n` +

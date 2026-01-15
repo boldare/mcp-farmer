@@ -1,6 +1,5 @@
 import { parseArgs } from "util";
 import * as path from "node:path";
-import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
 
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -21,6 +20,15 @@ import {
   resolveTargetFromConfig,
   type CommandTarget,
 } from "../shared/target.js";
+import {
+  checkbox,
+  spinner,
+  intro,
+  outro,
+  log as promptLog,
+  cancel,
+  handleCancel,
+} from "../shared/prompts.js";
 
 function printHelp(): void {
   console.log(`Usage: mcp-farmer eval <url> [options]
@@ -188,7 +196,7 @@ async function runEval(
     session = result.session;
     client = result.client;
   } catch (error) {
-    p.log.error("Could not start the coding agent. Is it installed?");
+    promptLog.error("Could not start the coding agent. Is it installed?");
     log("spawn_agent_failed", error);
     process.exit(1);
   }
@@ -197,7 +205,7 @@ async function runEval(
 
   try {
     const toolWord = pluralize("tool", tools.length);
-    const workSpinner = p.spinner();
+    const workSpinner = spinner();
     workSpinner.start(`Evaluating ${tools.length} ${toolWord}...`);
 
     client.setSpinner(workSpinner);
@@ -216,22 +224,22 @@ async function runEval(
 
     if (promptResult.stopReason === "end_turn") {
       client.stopSpinner(`Evaluated ${tools.length} ${toolWord}`);
-      p.log.info(`Report written to: ${reportPath}`);
-      p.outro("Evaluation complete.");
+      promptLog.info(`Report written to: ${reportPath}`);
+      outro("Evaluation complete.");
       log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
       client.stopSpinner("Cancelled");
-      p.cancel("Evaluation was cancelled.");
+      cancel("Evaluation was cancelled.");
       log("session_completed", "cancelled");
     } else {
       client.stopSpinner("Complete");
-      p.log.info(`Report written to: ${reportPath}`);
-      p.outro("Evaluation complete.");
+      promptLog.info(`Report written to: ${reportPath}`);
+      outro("Evaluation complete.");
       log("session_completed", promptResult.stopReason);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    p.log.error(`Something went wrong: ${message}`);
+    promptLog.error(`Something went wrong: ${message}`);
     log("agent_error", error);
     process.exit(1);
   } finally {
@@ -286,9 +294,9 @@ export async function evalCommand(args: string[]) {
     process.exit(2);
   }
 
-  p.intro("MCP Tool Evaluation");
+  intro("MCP Tool Evaluation");
 
-  const s = p.spinner();
+  const s = spinner();
   s.start("Connecting to server...");
 
   let mcpClient: Client;
@@ -317,34 +325,39 @@ export async function evalCommand(args: string[]) {
     const { tools } = await mcpClient.listTools();
 
     if (tools.length === 0) {
-      p.log.warn("No tools available on this server.");
+      promptLog.warn("No tools available on this server.");
       await transport.close();
       return;
     }
 
-    p.log.info(`Found ${tools.length} tool(s)`);
+    promptLog.info(`Found ${tools.length} tool(s)`);
 
-    const toolOptions = tools.map((tool) => ({
+    const toolChoices = tools.map((tool) => ({
       value: tool,
-      label: tool.name,
-      hint: tool.description,
+      name: tool.name,
+      description: tool.description,
     }));
 
-    const selectedTools = await p.multiselect({
-      message: "Select tools to evaluate:",
-      options: toolOptions,
-      required: true,
-    });
+    let selectedTools: Tool[];
+    try {
+      selectedTools = await checkbox({
+        message: "Select tools to evaluate:",
+        choices: toolChoices,
+      });
 
-    if (p.isCancel(selectedTools)) {
-      p.cancel("Operation cancelled.");
+      if (selectedTools.length === 0) {
+        cancel("At least one tool must be selected.");
+        await transport.close();
+        process.exit(0);
+      }
+    } catch (error) {
       await transport.close();
-      process.exit(0);
+      handleCancel(error);
     }
 
     await transport.close();
 
-    await runEval(resolvedTarget, selectedTools as Tool[], serverName);
+    await runEval(resolvedTarget, selectedTools, serverName);
   } catch (error) {
     s.stop("Connection failed");
     const message = error instanceof Error ? error.message : String(error);

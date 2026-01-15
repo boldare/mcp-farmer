@@ -1,4 +1,3 @@
-import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
 import * as fs from "node:fs/promises";
 import { log as writeLog } from "../shared/log.js";
@@ -6,8 +5,7 @@ import {
   createPermissionHandler,
   createSessionUpdateHandler,
 } from "../shared/acp.js";
-
-type SpinnerInstance = ReturnType<typeof p.spinner>;
+import { type SpinnerInstance } from "../shared/prompts.js";
 
 interface AgentProgress {
   filesRead: number;

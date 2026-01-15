@@ -1,9 +1,18 @@
-import * as p from "@clack/prompts";
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import { servers } from "./servers.js";
 import { mcpClients } from "./clients.js";
+import {
+  select,
+  confirm,
+  spinner,
+  intro,
+  outro,
+  note,
+  log,
+  handleCancel,
+} from "../shared/prompts.js";
 
 interface PackageRunner {
   name: string;
@@ -143,58 +152,43 @@ export async function marketCommand(args: string[]) {
     process.exit(0);
   }
 
-  p.intro("MCP Server Market");
+  intro("MCP Server Market");
 
-  const serverSelection = await p.group(
-    {
-      server: () =>
-        p.select({
-          message: "Select an MCP server to install:",
-          options: servers.map((server) => ({
-            value: server,
-            label: server.name,
-            hint: server.description,
-          })),
-        }),
-      client: () =>
-        p.select({
-          message: "Select your MCP client:",
-          options: mcpClients.map((client) => ({
-            value: client,
-            label: client.displayName,
-            hint: client.hint,
-          })),
-        }),
-    },
-    {
-      onCancel: () => {
-        p.cancel("Operation cancelled.");
-        process.exit(0);
-      },
-    },
-  );
-
-  const server = serverSelection.server;
-  const client = serverSelection.client;
-
+  let server: (typeof servers)[number];
+  let client: (typeof mcpClients)[number];
   let runner: PackageRunner | undefined;
 
-  if (server.package) {
-    const runnerSelection = await p.select({
-      message: "Select your preferred package runner:",
-      options: runners.map((r) => ({
-        value: r,
-        label: r.label,
-        hint: r.hint,
+  try {
+    server = await select({
+      message: "Select an MCP server to install:",
+      choices: servers.map((s) => ({
+        value: s,
+        name: s.name,
+        description: s.description,
       })),
     });
 
-    if (p.isCancel(runnerSelection)) {
-      p.cancel("Operation cancelled.");
-      process.exit(0);
-    }
+    client = await select({
+      message: "Select your MCP client:",
+      choices: mcpClients.map((c) => ({
+        value: c,
+        name: c.displayName,
+        description: c.hint,
+      })),
+    });
 
-    runner = runnerSelection;
+    if (server.package) {
+      runner = await select({
+        message: "Select your preferred package runner:",
+        choices: runners.map((r) => ({
+          value: r,
+          name: r.label,
+          description: r.hint,
+        })),
+      });
+    }
+  } catch (error) {
+    handleCancel(error);
   }
 
   const serverName = normalizeServerName(server.name);
@@ -206,35 +200,39 @@ export async function marketCommand(args: string[]) {
   );
   const configKey = getConfigKey(client.id);
 
-  p.note(
+  note(
     JSON.stringify({ [serverName]: serverConfig }, null, 2),
     "Server Configuration",
   );
 
-  const confirmSave = await p.confirm({
-    message: `Add this server to your ${client.displayName} configuration?`,
-    initialValue: true,
-  });
+  try {
+    const confirmSave = await confirm({
+      message: `Add this server to your ${client.displayName} configuration?`,
+      default: true,
+    });
 
-  if (p.isCancel(confirmSave) || !confirmSave) {
-    p.outro("Configuration not saved.");
-    return;
+    if (!confirmSave) {
+      outro("Configuration not saved.");
+      return;
+    }
+  } catch (error) {
+    handleCancel(error);
   }
 
-  const s = p.spinner();
+  const s = spinner();
   s.start("Saving configuration");
 
   try {
     await saveServerConfig(client.path, serverName, serverConfig, configKey);
     s.stop("Configuration saved");
 
-    p.note(client.path, "Configuration File");
+    note(client.path, "Configuration File");
 
-    p.outro(
+    outro(
       `${server.name} has been added to ${client.displayName}!\n\n   Restart ${client.displayName} to activate the server.`,
     );
 
-    p.log.message(
+    log.message(
       `What's next?\n` +
         `  mcp-farmer try   Test the installed server\n` +
         `  mcp-farmer vet   Check the server's quality`,
@@ -245,7 +243,7 @@ export async function marketCommand(args: string[]) {
 
     const fullConfig = { [configKey]: { [serverName]: serverConfig } };
     const manualInstallMessage = `Add this to your MCP configuration file:\n${client.path}\n\n${JSON.stringify(fullConfig, null, 2)}`;
-    p.note(manualInstallMessage, "Manual Installation");
+    note(manualInstallMessage, "Manual Installation");
     process.exit(1);
   }
 }
