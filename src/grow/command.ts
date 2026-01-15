@@ -1,8 +1,4 @@
 import * as p from "@clack/prompts";
-import * as acp from "@agentclientprotocol/sdk";
-import { spawn, type ChildProcess } from "node:child_process";
-import { Readable, Writable } from "node:stream";
-import { fileURLToPath } from "node:url";
 
 import { parseOpenApiSpec, type OpenAPIOperation } from "./openapi.js";
 import {
@@ -11,59 +7,17 @@ import {
   type GraphQLOperationWithFieldMapping,
 } from "./graphql.js";
 import { CodingClient } from "./acp.js";
-import { log, initLog } from "./log.js";
+import { log, initLog } from "../shared/log.js";
+import { pluralize } from "../shared/text.js";
+import {
+  selectCodingAgent,
+  connectAgent,
+  type CodingAgent,
+  AgentSession,
+} from "../shared/acp.js";
 
 export interface EndpointWithFieldMapping extends OpenAPIOperation {
   selectedResponseFields?: string[];
-}
-
-type CodingAgent =
-  | "opencode"
-  | "claude-code"
-  | "gemini-cli"
-  | "github-copilot-cli";
-
-interface AgentConnection {
-  connection: acp.ClientSideConnection;
-  process: ChildProcess;
-}
-
-interface SpawnResult {
-  connection: AgentConnection;
-  client: CodingClient;
-}
-
-function spawnAgent(agent: CodingAgent): SpawnResult {
-  let agentProcess: ChildProcess;
-
-  if (agent === "opencode") {
-    agentProcess = spawn("opencode", ["acp"]);
-  } else if (agent === "gemini-cli") {
-    agentProcess = spawn("gemini", ["--experimental-acp"]);
-  } else {
-    const claudeCodePath = fileURLToPath(
-      import.meta.resolve("@zed-industries/claude-code-acp/dist/index.js"),
-    );
-    agentProcess = spawn(process.execPath, [claudeCodePath]);
-  }
-
-  if (!agentProcess.stdin || !agentProcess.stdout) {
-    throw new Error("Failed to spawn agent process");
-  }
-
-  const input = Writable.toWeb(agentProcess.stdin);
-  const output = Readable.toWeb(
-    agentProcess.stdout,
-  ) as ReadableStream<Uint8Array>;
-
-  const client = new CodingClient();
-  const agentStream = acp.ndJsonStream(input, output);
-  const connection = new acp.ClientSideConnection(() => client, agentStream);
-
-  return {
-    connection: { connection, process: agentProcess },
-    client,
-  };
 }
 
 function printHelp() {
@@ -149,42 +103,13 @@ async function selectFieldsForOperations(
     result.push({
       ...op,
       selectedReturnFields:
-        selectedFields.length > 0 ? selectedFields : undefined,
+        (selectedFields as string[]).length > 0
+          ? (selectedFields as string[])
+          : undefined,
     });
   }
 
   return result;
-}
-
-async function selectCodingAgent(): Promise<CodingAgent | null> {
-  const agentChoice = await p.select({
-    message: "Select a coding agent:",
-    options: [
-      { value: "opencode" as CodingAgent, label: "OpenCode", hint: "opencode" },
-      {
-        value: "claude-code" as CodingAgent,
-        label: "Claude Code",
-        hint: "claude-code-acp",
-      },
-      {
-        value: "gemini-cli" as CodingAgent,
-        label: "Gemini CLI",
-        hint: "gemini --experimental-acp",
-      },
-      {
-        value: "github-copilot-cli" as CodingAgent,
-        label: "GitHub Copilot CLI",
-        hint: "copilot --acp",
-      },
-    ],
-  });
-
-  if (p.isCancel(agentChoice)) {
-    p.cancel("Operation cancelled.");
-    return null;
-  }
-
-  return agentChoice;
 }
 
 async function runAgentWithPrompt(
@@ -192,113 +117,40 @@ async function runAgentWithPrompt(
   promptText: string,
   toolCount: number,
 ): Promise<void> {
-  const labelMap = {
-    opencode: "OpenCode",
-    "gemini-cli": "Gemini CLI",
-    "claude-code": "Claude Code",
-    "github-copilot-cli": "GitHub Copilot CLI",
-  };
-
-  const agentLabel = labelMap[agentChoice];
-  const spinner = p.spinner();
-  spinner.start(`Connecting to ${agentLabel}...`);
-
-  let agent: AgentConnection;
+  let session: AgentSession;
   let client: CodingClient;
-  try {
-    const result = spawnAgent(agentChoice);
-    agent = result.connection;
-    client = result.client;
-  } catch (error) {
-    spinner.stop("Failed to connect");
-    p.log.error("Could not start the coding agent. Is it installed?");
-    log("spawn_agent_failed", error);
-    process.exit(1);
-  }
-
-  const { connection, process: agentProcess } = agent;
 
   try {
-    const initResult = await connection.initialize({
-      protocolVersion: acp.PROTOCOL_VERSION,
+    const result = await connectAgent({
+      agent: agentChoice,
+      clientFactory: () => new CodingClient(),
       clientCapabilities: {
         fs: {
           readTextFile: true,
           writeTextFile: true,
         },
       },
+      enableModelSelection: true,
     });
+    session = result.session;
+    client = result.client;
+  } catch (error) {
+    p.log.error("Could not start the coding agent. Is it installed?");
+    log("spawn_agent_failed", error);
+    process.exit(1);
+  }
 
-    log(
-      "agent_connected",
-      `${initResult.agentInfo.name} ${initResult.agentInfo.version}`,
-    );
+  const { connection, process: agentProcess, sessionId } = session;
 
-    const sessionResult = await connection.newSession({
-      cwd: process.cwd(),
-      mcpServers: [],
-    });
-
-    const currentModelId = sessionResult.models?.currentModelId;
-    const availableModels = sessionResult.models?.availableModels;
-    let selectedModelId = currentModelId;
-
-    spinner.stop(`Connected to ${agentLabel}`);
-
-    if (availableModels && availableModels.length > 1) {
-      const defaultModelId =
-        currentModelId || availableModels[0]?.modelId || "";
-      const defaultModelName =
-        availableModels.find((m: acp.ModelInfo) => m.modelId === currentModelId)
-          ?.name ||
-        currentModelId ||
-        "default";
-
-      const modelOptions: { value: string; label: string; hint?: string }[] = [
-        {
-          value: defaultModelId,
-          label: `Use default (${defaultModelName})`,
-          hint: "recommended",
-        },
-        ...availableModels
-          .filter((model: acp.ModelInfo) => model.modelId !== defaultModelId)
-          .map((model: acp.ModelInfo) => ({
-            value: model.modelId,
-            label: model.name,
-          })),
-      ];
-
-      const modelChoice = await p.select({
-        message: "Select a model:",
-        options: modelOptions,
-      });
-
-      if (p.isCancel(modelChoice)) {
-        p.cancel("Operation cancelled.");
-        process.exit(0);
-      }
-
-      if (modelChoice !== currentModelId) {
-        selectedModelId = modelChoice;
-        await connection.unstable_setSessionModel({
-          modelId: modelChoice,
-          providerId: modelChoice.split("/")[0] || "",
-          sessionId: sessionResult.sessionId,
-        });
-        log("session_model_set", modelChoice);
-      }
-    }
-
-    log("session_created", selectedModelId || "default");
-
-    const toolWord = toolCount === 1 ? "tool" : "tools";
+  try {
+    const toolWord = pluralize("tool", toolCount);
     const workSpinner = p.spinner();
     workSpinner.start(`Generating ${toolCount} ${toolWord}...`);
 
     client.setSpinner(workSpinner);
 
     const promptResult = await connection.prompt({
-      sessionId: sessionResult.sessionId,
+      sessionId,
       prompt: [
         {
           type: "text",
@@ -308,7 +160,7 @@ async function runAgentWithPrompt(
     });
 
     if (promptResult.stopReason === "end_turn") {
-      workSpinner.stop(`Generated ${toolCount} MCP ${toolWord}`);
+      client.stopSpinner(`Generated ${toolCount} MCP ${toolWord}`);
       p.outro("Done! Your new tools are ready to use.");
       p.log.message(
         `What's next?\n` +
@@ -317,11 +169,11 @@ async function runAgentWithPrompt(
       );
       log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
-      workSpinner.stop("Cancelled");
+      client.stopSpinner("Cancelled");
       p.cancel("Generation was cancelled.");
       log("session_completed", "cancelled");
     } else {
-      workSpinner.stop("Complete");
+      client.stopSpinner("Complete");
       p.outro("Generation complete.");
       p.log.message(
         `What's next?\n` +
@@ -402,9 +254,9 @@ async function handleOpenApiFeature(): Promise<void> {
     process.exit(0);
   }
 
-  const selectedEndpoints = selectedIndices
+  const selectedEndpoints = (selectedIndices as number[])
     .map((i) => endpoints[i])
-    .filter((ep) => ep !== undefined);
+    .filter((ep): ep is OpenAPIOperation => ep !== undefined);
 
   log(
     "selected_endpoints",
@@ -455,7 +307,9 @@ async function handleOpenApiFeature(): Promise<void> {
     endpointsWithMapping.push({
       ...endpoint,
       selectedResponseFields:
-        selectedFields.length > 0 ? selectedFields : undefined,
+        (selectedFields as string[]).length > 0
+          ? (selectedFields as string[])
+          : undefined,
     });
   }
 
@@ -576,13 +430,13 @@ async function handleGraphQLFeature(): Promise<void> {
 
     const selectedQueries = await selectFieldsForOperations(
       queries,
-      selectedQueryIndices,
+      selectedQueryIndices as number[],
       "Query",
     );
     selectedOperations.push(...selectedQueries);
 
-    if (selectedQueryIndices.length > 0) {
-      const queryNames = selectedQueryIndices
+    if ((selectedQueryIndices as number[]).length > 0) {
+      const queryNames = (selectedQueryIndices as number[])
         .map((i) => queries[i]?.name)
         .filter(Boolean)
         .join(", ");
@@ -612,13 +466,13 @@ async function handleGraphQLFeature(): Promise<void> {
 
     const selectedMutations = await selectFieldsForOperations(
       mutations,
-      selectedMutationIndices,
+      selectedMutationIndices as number[],
       "Mutation",
     );
     selectedOperations.push(...selectedMutations);
 
-    if (selectedMutationIndices.length > 0) {
-      const mutationNames = selectedMutationIndices
+    if ((selectedMutationIndices as number[]).length > 0) {
+      const mutationNames = (selectedMutationIndices as number[])
         .map((i) => mutations[i]?.name)
         .filter(Boolean)
         .join(", ");
@@ -677,7 +531,7 @@ export async function growCommand(args: string[]) {
     process.exit(0);
   }
 
-  initLog();
+  initLog("grow");
 
   p.intro("Grow MCP Tools");
 

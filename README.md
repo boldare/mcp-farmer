@@ -15,6 +15,7 @@ Commands:
   market       Browse and install popular MCP servers
   try <url>    Interactively call a tool on an MCP server
   grow         Generate MCP tools from OpenAPI or GraphQL specs
+  eval         Evaluate MCP tools using an AI coding agent
 
 Options:
   --help       Show this help message
@@ -61,6 +62,17 @@ mcp-farmer grow graphql   # Generate tools from GraphQL endpoint
 ```
 
 Parses your API specification, lets you select endpoints/operations and response fields, then uses an AI coding agent (OpenCode, Claude Code, or Gemini CLI) via ACP to generate the MCP tool code.
+
+### `eval` — Evaluate MCP tools with AI
+
+```bash
+mcp-farmer eval http://localhost:3000/mcp              # HTTP
+mcp-farmer eval                                        # Auto-detect from config
+mcp-farmer eval --config .cursor/mcp.json              # Explicit config file
+mcp-farmer eval -- npx -y @modelcontextprotocol/server-memory  # Stdio
+```
+
+Connects to an MCP server, lets you select tools to evaluate, then uses an AI coding agent (OpenCode, Claude Code, or Gemini CLI) to generate test inputs, call each tool, and produce a markdown evaluation report.
 
 ### `vet` — Audit MCP server quality
 
