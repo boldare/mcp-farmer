@@ -15,6 +15,7 @@ import {
   type McpServerEntry,
 } from "../shared/config.js";
 import { log, initLog } from "../shared/log.js";
+import { pluralize } from "../shared/text.js";
 import { EvalClient } from "./acp.js";
 import {
   selectCodingAgent,
@@ -253,10 +254,10 @@ Use this markdown structure:
 
 ## Summary Table
 
-|| Tool | Tests | Passed | Failed |
-||------|-------|--------|--------|
-|| tool_name | 3 | 3 | 0 |
-|| ... | ... | ... | ... |
+| Tool | Tests | Passed | Failed |
+|------|-------|--------|--------|
+| tool_name | 3 | 3 | 0 |
+| ... | ... | ... | ... |
 
 ## Tools to Evaluate
 
@@ -312,7 +313,7 @@ async function runEval(
   const { connection, process: agentProcess, sessionId } = session;
 
   try {
-    const toolWord = tools.length === 1 ? "tool" : "tools";
+    const toolWord = pluralize("tool", tools.length);
     const workSpinner = p.spinner();
     workSpinner.start(`Evaluating ${tools.length} ${toolWord}...`);
 

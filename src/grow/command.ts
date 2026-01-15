@@ -8,6 +8,7 @@ import {
 } from "./graphql.js";
 import { CodingClient } from "./acp.js";
 import { log, initLog } from "../shared/log.js";
+import { pluralize } from "../shared/text.js";
 import {
   selectCodingAgent,
   connectAgent,
@@ -142,7 +143,7 @@ async function runAgentWithPrompt(
   const { connection, process: agentProcess, sessionId } = session;
 
   try {
-    const toolWord = toolCount === 1 ? "tool" : "tools";
+    const toolWord = pluralize("tool", toolCount);
     const workSpinner = p.spinner();
     workSpinner.start(`Generating ${toolCount} ${toolWord}...`);
 
