@@ -1,5 +1,4 @@
 import * as p from "@clack/prompts";
-import * as acp from "@agentclientprotocol/sdk";
 
 import { parseOpenApiSpec, type OpenAPIOperation } from "./openapi.js";
 import {
@@ -12,8 +11,8 @@ import { log, initLog } from "../shared/log.js";
 import {
   selectCodingAgent,
   connectAgent,
-  AGENT_LABELS,
   type CodingAgent,
+  AgentSession,
 } from "../shared/acp.js";
 
 export interface EndpointWithFieldMapping extends OpenAPIOperation {
@@ -117,9 +116,7 @@ async function runAgentWithPrompt(
   promptText: string,
   toolCount: number,
 ): Promise<void> {
-  const agentLabel = AGENT_LABELS[agentChoice];
-
-  let session: any;
+  let session: AgentSession;
   let client: CodingClient;
 
   try {
@@ -162,7 +159,7 @@ async function runAgentWithPrompt(
     });
 
     if (promptResult.stopReason === "end_turn") {
-      workSpinner.stop(`Generated ${toolCount} MCP ${toolWord}`);
+      client.stopSpinner(`Generated ${toolCount} MCP ${toolWord}`);
       p.outro("Done! Your new tools are ready to use.");
       p.log.message(
         `What's next?\n` +
@@ -171,11 +168,11 @@ async function runAgentWithPrompt(
       );
       log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
-      workSpinner.stop("Cancelled");
+      client.stopSpinner("Cancelled");
       p.cancel("Generation was cancelled.");
       log("session_completed", "cancelled");
     } else {
-      workSpinner.stop("Complete");
+      client.stopSpinner("Complete");
       p.outro("Generation complete.");
       p.log.message(
         `What's next?\n` +

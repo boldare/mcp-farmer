@@ -56,15 +56,16 @@ export class EvalClient implements acp.Client {
     this.spinner = spinner;
   }
 
+  stopSpinner(message: string): void {
+    if (this.spinner) {
+      this.spinner.stop(message);
+      this.spinner = null;
+    }
+  }
+
   private getProgressMessage = (): string => {
     return formatProgressMessage(this.progress);
   };
-
-  private updateSpinner(): void {
-    if (this.spinner) {
-      this.spinner.message(this.getProgressMessage());
-    }
-  }
 
   requestPermission = createPermissionHandler(
     () => this.spinner,
@@ -74,7 +75,6 @@ export class EvalClient implements acp.Client {
   sessionUpdate = createSessionUpdateHandler({
     onToolCall: (update) => {
       this.progress.currentAction = getActionMessage(update.kind, update.title);
-      this.updateSpinner();
     },
     onToolCallUpdate: (update) => {
       const kindStr = update.kind?.toString() || "other";
@@ -82,7 +82,6 @@ export class EvalClient implements acp.Client {
         if (kindStr === "mcp") {
           this.progress.toolsCalled++;
         }
-        this.updateSpinner();
       }
     },
   });

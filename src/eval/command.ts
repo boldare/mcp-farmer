@@ -19,7 +19,7 @@ import { EvalClient } from "./acp.js";
 import {
   selectCodingAgent,
   connectAgent,
-  type CodingAgent,
+  AgentSession,
 } from "../shared/acp.js";
 
 interface StdioTarget {
@@ -288,7 +288,7 @@ async function runEval(
 
   const mcpServerConfig = buildMcpServerConfig(target, serverName);
 
-  let session: any;
+  let session: AgentSession;
   let client: EvalClient;
 
   try {
@@ -328,16 +328,16 @@ async function runEval(
     });
 
     if (promptResult.stopReason === "end_turn") {
-      workSpinner.stop(`Evaluated ${tools.length} ${toolWord}`);
+      client.stopSpinner(`Evaluated ${tools.length} ${toolWord}`);
       p.log.info(`Report written to: ${reportPath}`);
       p.outro("Evaluation complete.");
       log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
-      workSpinner.stop("Cancelled");
+      client.stopSpinner("Cancelled");
       p.cancel("Evaluation was cancelled.");
       log("session_completed", "cancelled");
     } else {
-      workSpinner.stop("Complete");
+      client.stopSpinner("Complete");
       p.log.info(`Report written to: ${reportPath}`);
       p.outro("Evaluation complete.");
       log("session_completed", promptResult.stopReason);

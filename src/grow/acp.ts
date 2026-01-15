@@ -69,15 +69,16 @@ export class CodingClient implements acp.Client {
     this.spinner = spinner;
   }
 
+  stopSpinner(message: string): void {
+    if (this.spinner) {
+      this.spinner.stop(message);
+      this.spinner = null;
+    }
+  }
+
   private getProgressMessage = (): string => {
     return formatProgressMessage(this.progress);
   };
-
-  private updateSpinner(): void {
-    if (this.spinner) {
-      this.spinner.message(this.getProgressMessage());
-    }
-  }
 
   requestPermission = createPermissionHandler(
     () => this.spinner,
@@ -87,7 +88,6 @@ export class CodingClient implements acp.Client {
   sessionUpdate = createSessionUpdateHandler({
     onToolCall: (update) => {
       this.progress.currentAction = getActionMessage(update.kind, update.title);
-      this.updateSpinner();
     },
     onToolCallUpdate: (update) => {
       const { status, kind } = update;
@@ -100,7 +100,6 @@ export class CodingClient implements acp.Client {
           this.progress.filesWritten++;
           this.progress.currentAction = "Writing code";
         }
-        this.updateSpinner();
       }
     },
   });

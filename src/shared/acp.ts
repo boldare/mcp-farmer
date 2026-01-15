@@ -216,10 +216,11 @@ export function createPermissionHandler(
     const spinner = getSpinner();
     if (spinner) spinner.stop("Permission required");
 
-    log("permission_requested", params.toolCall.title || undefined);
+    const title = params.toolCall.title || "Unknown action";
+    log("permission_requested", title);
 
     const response = await p.select({
-      message: "Agent needs permission to proceed:",
+      message: `Allow "${title}"?`,
       options: params.options.map((opt) => ({
         value: opt.optionId,
         label: opt.name,
@@ -228,13 +229,16 @@ export function createPermissionHandler(
     });
 
     if (p.isCancel(response)) {
-      log("permission_cancelled", params.toolCall.title || undefined);
+      log("permission_cancelled", title);
       return { outcome: { outcome: "cancelled" } };
     }
 
-    log("permission_granted", `${params.toolCall.title}: ${response}`);
+    log("permission_granted", `${title}: ${response}`);
 
-    if (spinner) spinner.start(getProgressMessage());
+    const currentSpinner = getSpinner();
+    if (currentSpinner) {
+      currentSpinner.start(getProgressMessage());
+    }
 
     return { outcome: { outcome: "selected", optionId: response as string } };
   };
