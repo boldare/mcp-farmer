@@ -260,9 +260,12 @@ Use this markdown structure:
 
 ## Tools to Evaluate
 
+You must only call the tools listed below. Do not call any other tools.
+
 <tools>
 ${toolsJson}
 </tools>
+
 
 Begin by calling each tool with your generated test inputs, then write the markdown report to ${reportPath}.`;
 }
