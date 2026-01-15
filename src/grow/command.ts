@@ -17,7 +17,11 @@ export interface EndpointWithFieldMapping extends OpenAPIOperation {
   selectedResponseFields?: string[];
 }
 
-type CodingAgent = "opencode" | "claude-code" | "gemini-cli";
+type CodingAgent =
+  | "opencode"
+  | "claude-code"
+  | "gemini-cli"
+  | "github-copilot-cli";
 
 interface AgentConnection {
   connection: acp.ClientSideConnection;
@@ -167,6 +171,11 @@ async function selectCodingAgent(): Promise<CodingAgent | null> {
         label: "Gemini CLI",
         hint: "gemini --experimental-acp",
       },
+      {
+        value: "github-copilot-cli" as CodingAgent,
+        label: "GitHub Copilot CLI",
+        hint: "copilot --acp",
+      },
     ],
   });
 
@@ -187,6 +196,7 @@ async function runAgentWithPrompt(
     opencode: "OpenCode",
     "gemini-cli": "Gemini CLI",
     "claude-code": "Claude Code",
+    "github-copilot-cli": "GitHub Copilot CLI",
   };
 
   const agentLabel = labelMap[agentChoice];
