@@ -507,4 +507,12 @@ docker run -p 3000:3000 ${name}
       runInstructions +
       `Note: Requires Node.js 20+`,
   );
+
+  p.log.message(
+    `What's next?\n` +
+      `  mcp-farmer grow openapi   Generate tools from OpenAPI/Swagger spec\n` +
+      `  mcp-farmer grow graphql   Generate tools from GraphQL endpoint\n` +
+      `  mcp-farmer vet            Validate your server's tools\n` +
+      `  mcp-farmer try            Test your tools interactively`,
+  );
 }

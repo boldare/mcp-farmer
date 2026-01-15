@@ -310,6 +310,11 @@ async function runAgentWithPrompt(
     if (promptResult.stopReason === "end_turn") {
       workSpinner.stop(`Generated ${toolCount} MCP ${toolWord}`);
       p.outro("Done! Your new tools are ready to use.");
+      p.log.message(
+        `What's next?\n` +
+          `  mcp-farmer vet   See a report on your generated tools\n` +
+          `  mcp-farmer try   Test your new tools interactively`,
+      );
       log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
       workSpinner.stop("Cancelled");
@@ -318,6 +323,11 @@ async function runAgentWithPrompt(
     } else {
       workSpinner.stop("Complete");
       p.outro("Generation complete.");
+      p.log.message(
+        `What's next?\n` +
+          `  mcp-farmer vet   See a report on your generated tools\n` +
+          `  mcp-farmer try   Test your new tools interactively`,
+      );
       log("session_completed", promptResult.stopReason);
     }
   } catch (error) {

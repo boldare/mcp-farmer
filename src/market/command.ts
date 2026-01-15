@@ -233,6 +233,12 @@ export async function marketCommand(args: string[]) {
     p.outro(
       `${server.name} has been added to ${client.displayName}!\n\n   Restart ${client.displayName} to activate the server.`,
     );
+
+    p.log.message(
+      `What's next?\n` +
+        `  mcp-farmer try   Test the installed server\n` +
+        `  mcp-farmer vet   Check the server's quality`,
+    );
   } catch (error) {
     s.stop("Failed to save configuration");
     console.error(error);

@@ -397,6 +397,8 @@ export async function tryCommand(args: string[]) {
     await runTry(client, transport);
 
     p.outro("Done");
+
+    p.log.message(`What's next?\n` + `  mcp-farmer vet   Get a full report`);
   } catch (error) {
     s.stop("Connection failed");
     const message = error instanceof Error ? error.message : String(error);
