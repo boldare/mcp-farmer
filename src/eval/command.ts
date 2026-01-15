@@ -2,9 +2,6 @@ import { parseArgs } from "util";
 import * as path from "node:path";
 import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
-import { spawn, type ChildProcess } from "node:child_process";
-import { Readable, Writable } from "node:stream";
-import { fileURLToPath } from "node:url";
 
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
@@ -19,6 +16,11 @@ import {
 } from "../shared/config.js";
 import { log, initLog } from "../shared/log.js";
 import { EvalClient } from "./acp.js";
+import {
+  selectCodingAgent,
+  connectAgent,
+  type CodingAgent,
+} from "../shared/acp.js";
 
 interface StdioTarget {
   mode: "stdio";
@@ -32,18 +34,6 @@ interface HttpTarget {
 }
 
 type EvalTarget = StdioTarget | HttpTarget;
-
-type CodingAgent = "opencode" | "claude-code" | "gemini-cli";
-
-interface AgentConnection {
-  connection: acp.ClientSideConnection;
-  process: ChildProcess;
-}
-
-interface SpawnResult {
-  connection: AgentConnection;
-  client: EvalClient;
-}
 
 function printHelp(): void {
   console.log(`Usage: mcp-farmer eval <url> [options]
@@ -133,7 +123,7 @@ async function selectServerFromEntries(
     process.exit(0);
   }
 
-  return selection;
+  return selection as McpServerEntry;
 }
 
 async function resolveTargetFromConfig(
@@ -172,66 +162,7 @@ async function resolveTargetFromConfig(
     process.exit(2);
   }
 
-  return target;
-}
-
-function spawnAgent(agent: CodingAgent): SpawnResult {
-  let agentProcess: ChildProcess;
-
-  if (agent === "opencode") {
-    agentProcess = spawn("opencode", ["acp"]);
-  } else if (agent === "gemini-cli") {
-    agentProcess = spawn("gemini", ["--experimental-acp"]);
-  } else {
-    const claudeCodePath = fileURLToPath(
-      import.meta.resolve("@zed-industries/claude-code-acp/dist/index.js"),
-    );
-    agentProcess = spawn(process.execPath, [claudeCodePath]);
-  }
-
-  if (!agentProcess.stdin || !agentProcess.stdout) {
-    throw new Error("Failed to spawn agent process");
-  }
-
-  const input = Writable.toWeb(agentProcess.stdin);
-  const output = Readable.toWeb(
-    agentProcess.stdout,
-  ) as ReadableStream<Uint8Array>;
-
-  const client = new EvalClient();
-  const agentStream = acp.ndJsonStream(input, output);
-  const connection = new acp.ClientSideConnection(() => client, agentStream);
-
-  return {
-    connection: { connection, process: agentProcess },
-    client,
-  };
-}
-
-async function selectCodingAgent(): Promise<CodingAgent | null> {
-  const agentChoice = await p.select({
-    message: "Select a coding agent:",
-    options: [
-      { value: "opencode" as CodingAgent, label: "OpenCode", hint: "opencode" },
-      {
-        value: "claude-code" as CodingAgent,
-        label: "Claude Code",
-        hint: "claude-code-acp",
-      },
-      {
-        value: "gemini-cli" as CodingAgent,
-        label: "Gemini CLI",
-        hint: "gemini --experimental-acp",
-      },
-    ],
-  });
-
-  if (p.isCancel(agentChoice)) {
-    p.cancel("Operation cancelled.");
-    return null;
-  }
-
-  return agentChoice;
+  return target as EvalTarget;
 }
 
 function buildMcpServerConfig(
@@ -322,10 +253,10 @@ Use this markdown structure:
 
 ## Summary Table
 
-| Tool | Tests | Passed | Failed |
-|------|-------|--------|--------|
-| tool_name | 3 | 3 | 0 |
-| ... | ... | ... | ... |
+|| Tool | Tests | Passed | Failed |
+||------|-------|--------|--------|
+|| tool_name | 3 | 3 | 0 |
+|| ... | ... | ... | ... |
 
 ## Tools to Evaluate
 
@@ -341,7 +272,9 @@ async function runEval(
   tools: Tool[],
   serverName: string,
 ): Promise<void> {
-  const agentChoice = await selectCodingAgent();
+  const agentChoice = await selectCodingAgent({
+    agents: ["opencode", "claude-code", "gemini-cli"],
+  });
   if (!agentChoice) {
     log("cancelled", "agent selection");
     process.exit(0);
@@ -349,57 +282,33 @@ async function runEval(
 
   log("selected_agent", agentChoice);
 
-  const labelMap = {
-    opencode: "OpenCode",
-    "gemini-cli": "Gemini CLI",
-    "claude-code": "Claude Code",
-  };
+  const cwd = process.cwd();
+  const reportFilename = generateReportFilename(serverName);
+  const reportPath = path.join(cwd, reportFilename);
 
-  const agentLabel = labelMap[agentChoice];
-  const spinner = p.spinner();
-  spinner.start(`Connecting to ${agentLabel}...`);
+  const mcpServerConfig = buildMcpServerConfig(target, serverName);
 
-  let agent: AgentConnection;
+  let session: any;
   let client: EvalClient;
+
   try {
-    const result = spawnAgent(agentChoice);
-    agent = result.connection;
+    const result = await connectAgent({
+      agent: agentChoice,
+      clientFactory: () => new EvalClient(),
+      mcpServers: [mcpServerConfig],
+      enableModelSelection: true,
+    });
+    session = result.session;
     client = result.client;
   } catch (error) {
-    spinner.stop("Failed to connect");
     p.log.error("Could not start the coding agent. Is it installed?");
     log("spawn_agent_failed", error);
     process.exit(1);
   }
 
-  const { connection, process: agentProcess } = agent;
-
-  const cwd = process.cwd();
-  const reportFilename = generateReportFilename(serverName);
-  const reportPath = path.join(cwd, reportFilename);
+  const { connection, process: agentProcess, sessionId } = session;
 
   try {
-    const initResult = await connection.initialize({
-      protocolVersion: acp.PROTOCOL_VERSION,
-      clientCapabilities: {},
-    });
-
-    log(
-      "agent_connected",
-      `${initResult.agentInfo.name} ${initResult.agentInfo.version}`,
-    );
-
-    const mcpServerConfig = buildMcpServerConfig(target, serverName);
-
-    const sessionResult = await connection.newSession({
-      cwd,
-      mcpServers: [mcpServerConfig],
-    });
-
-    log("session_created", serverName);
-
-    spinner.stop(`Connected to ${agentLabel}`);
-
     const toolWord = tools.length === 1 ? "tool" : "tools";
     const workSpinner = p.spinner();
     workSpinner.start(`Evaluating ${tools.length} ${toolWord}...`);
@@ -409,7 +318,7 @@ async function runEval(
     const promptText = buildPrompt(tools, serverName, reportPath);
 
     const promptResult = await connection.prompt({
-      sessionId: sessionResult.sessionId,
+      sessionId,
       prompt: [
         {
           type: "text",
@@ -472,7 +381,7 @@ export async function evalCommand(args: string[]) {
   let resolvedTarget = target;
 
   if (!resolvedTarget) {
-    resolvedTarget = await resolveTargetFromConfig(values.config);
+    resolvedTarget = await resolveTargetFromConfig(values.config as string);
   }
 
   if (!resolvedTarget) {
@@ -545,7 +454,7 @@ export async function evalCommand(args: string[]) {
 
     await transport.close();
 
-    await runEval(resolvedTarget, selectedTools, serverName);
+    await runEval(resolvedTarget, selectedTools as Tool[], serverName);
   } catch (error) {
     s.stop("Connection failed");
     const message = error instanceof Error ? error.message : String(error);

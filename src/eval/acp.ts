@@ -1,6 +1,9 @@
 import * as p from "@clack/prompts";
 import * as acp from "@agentclientprotocol/sdk";
-import { log as writeLog } from "../shared/log.js";
+import {
+  createPermissionHandler,
+  createSessionUpdateHandler,
+} from "../shared/acp.js";
 
 type SpinnerInstance = ReturnType<typeof p.spinner>;
 
@@ -44,7 +47,6 @@ function formatProgressMessage(progress: EvalProgress): string {
 
 export class EvalClient implements acp.Client {
   private spinner: SpinnerInstance | null = null;
-  private suppressedToolCalls = new Set<string>();
   private progress: EvalProgress = {
     toolsCalled: 0,
     currentAction: "Starting",
@@ -54,103 +56,34 @@ export class EvalClient implements acp.Client {
     this.spinner = spinner;
   }
 
+  private getProgressMessage = (): string => {
+    return formatProgressMessage(this.progress);
+  };
+
   private updateSpinner(): void {
     if (this.spinner) {
-      this.spinner.message(formatProgressMessage(this.progress));
+      this.spinner.message(this.getProgressMessage());
     }
   }
 
-  async requestPermission(
-    params: acp.RequestPermissionRequest,
-  ): Promise<acp.RequestPermissionResponse> {
-    if (this.spinner) {
-      this.spinner.stop("Permission required");
-    }
+  requestPermission = createPermissionHandler(
+    () => this.spinner,
+    this.getProgressMessage,
+  );
 
-    writeLog("permission_requested", params.toolCall.title || undefined);
-
-    const response = await p.select({
-      message: "Agent needs permission to proceed:",
-      options: params.options.map((option) => ({
-        value: option.optionId,
-        label: option.name,
-        hint: option.kind,
-      })),
-    });
-
-    if (p.isCancel(response)) {
-      writeLog("permission_cancelled", params.toolCall.title || undefined);
-      return {
-        outcome: {
-          outcome: "cancelled",
-        },
-      };
-    }
-
-    writeLog("permission_granted", `${params.toolCall.title}: ${response}`);
-
-    if (this.spinner) {
-      this.spinner.start(formatProgressMessage(this.progress));
-    }
-
-    return {
-      outcome: {
-        outcome: "selected",
-        optionId: response,
-      },
-    };
-  }
-
-  async sessionUpdate({ update }: acp.SessionNotification): Promise<void> {
-    try {
-      switch (update.sessionUpdate) {
-        case "tool_call":
-          this.handleToolCall(update);
-          break;
-        case "tool_call_update":
-          this.handleToolCallUpdate(update);
-          break;
-      }
-    } catch (error) {
-      writeLog("session_update_error", error);
-    }
-  }
-
-  private handleToolCall(update: acp.ToolCall): void {
-    const toolCallId = update.toolCallId;
-    const title = update.title?.toLowerCase() || "";
-
-    if (title === "todowrite") {
-      this.suppressedToolCalls.add(toolCallId);
-      return;
-    }
-
-    writeLog("tool_call_started", update.title || "unknown");
-
-    const actionMessage = getActionMessage(update.kind, update.title);
-    this.progress.currentAction = actionMessage;
-    this.updateSpinner();
-  }
-
-  private handleToolCallUpdate(update: acp.ToolCallUpdate): void {
-    const { toolCallId, status, kind } = update;
-    const kindStr = kind?.toString() || "other";
-
-    if (this.suppressedToolCalls.has(toolCallId)) {
-      if (status === "completed" || status === "failed") {
-        this.suppressedToolCalls.delete(toolCallId);
-      }
-      return;
-    }
-
-    if (status === "completed") {
-      if (kindStr === "mcp") {
-        this.progress.toolsCalled++;
-      }
+  sessionUpdate = createSessionUpdateHandler({
+    onToolCall: (update) => {
+      this.progress.currentAction = getActionMessage(update.kind, update.title);
       this.updateSpinner();
-      writeLog("tool_call_completed", kindStr);
-    } else if (status === "failed") {
-      writeLog("tool_call_failed", kindStr);
-    }
-  }
+    },
+    onToolCallUpdate: (update) => {
+      const kindStr = update.kind?.toString() || "other";
+      if (update.status === "completed") {
+        if (kindStr === "mcp") {
+          this.progress.toolsCalled++;
+        }
+        this.updateSpinner();
+      }
+    },
+  });
 }
