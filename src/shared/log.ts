@@ -57,7 +57,15 @@ export function log(action: string, details?: string | Error | unknown): void {
   if (details instanceof Error) {
     detailsStr = details.message;
   } else if (details !== undefined) {
-    detailsStr = String(details);
+    if (typeof details === "object" && details !== null) {
+      try {
+        detailsStr = JSON.stringify(details);
+      } catch {
+        detailsStr = String(details);
+      }
+    } else {
+      detailsStr = String(details);
+    }
   }
 
   const detailsPart = detailsStr ? ` - ${detailsStr}` : "";

@@ -376,7 +376,7 @@ async function runEval(
 
     const mcpServerConfig = buildMcpServerConfig(target, serverName);
 
-    await connection.newSession({
+    const sessionResult = await connection.newSession({
       cwd: process.cwd(),
       mcpServers: [mcpServerConfig],
     });
@@ -394,7 +394,7 @@ async function runEval(
     const promptText = buildPrompt(tools, serverName);
 
     const promptResult = await connection.prompt({
-      sessionId: "eval-session",
+      sessionId: sessionResult.sessionId,
       prompt: [
         {
           type: "text",
