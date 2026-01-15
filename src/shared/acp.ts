@@ -34,8 +34,7 @@ export interface RunAgentOptions<TClient extends acp.Client> {
   onClientReady?: (client: TClient) => void;
 }
 
-// Core spawning logic
-export function spawnAgentProcess(agent: CodingAgent): ChildProcess {
+function spawnAgentProcess(agent: CodingAgent): ChildProcess {
   switch (agent) {
     case "opencode":
       return spawn("opencode", ["acp"]);
@@ -94,8 +93,7 @@ function getAgentHint(agent: CodingAgent): string {
   return hints[agent];
 }
 
-// Model selection as standalone function
-export async function promptModelSelection(
+async function promptModelSelection(
   connection: acp.ClientSideConnection,
   sessionResult: acp.NewSessionResponse,
 ): Promise<string | undefined> {

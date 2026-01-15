@@ -46,15 +46,15 @@ function getClaudeDesktopPath(): string {
   }
 }
 
-export function getConfigLocations(): ConfigLocation[] {
+function getConfigLocations(cwd: string): ConfigLocation[] {
   return [
     {
-      path: join(process.cwd(), ".cursor", "mcp.json"),
+      path: join(cwd, ".cursor", "mcp.json"),
       hint: ".cursor/mcp.json",
       configKey: "mcpServers",
     },
     {
-      path: join(process.cwd(), ".vscode", "mcp.json"),
+      path: join(cwd, ".vscode", "mcp.json"),
       hint: ".vscode/mcp.json",
       configKey: "servers",
     },
@@ -64,17 +64,17 @@ export function getConfigLocations(): ConfigLocation[] {
       configKey: "mcpServers",
     },
     {
-      path: join(process.cwd(), ".mcp.json"),
+      path: join(cwd, ".mcp.json"),
       hint: ".mcp.json",
       configKey: "mcpServers",
     },
     {
-      path: join(process.cwd(), "opencode.json"),
+      path: join(cwd, "opencode.json"),
       hint: "opencode.json",
       configKey: "mcp",
     },
     {
-      path: join(process.cwd(), ".gemini", "settings.json"),
+      path: join(cwd, ".gemini", "settings.json"),
       hint: ".gemini/settings.json",
       configKey: "mcpServers",
     },
@@ -121,7 +121,7 @@ export async function parseConfigFile(
 }
 
 export async function discoverServers(): Promise<McpServerEntry[]> {
-  const locations = getConfigLocations();
+  const locations = getConfigLocations(process.cwd());
   const servers: McpServerEntry[] = [];
 
   for (const location of locations) {

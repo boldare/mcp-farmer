@@ -40,10 +40,6 @@ export function initLog(prefix: string): string {
   return currentLogPath;
 }
 
-export function getLogPath(): string | null {
-  return currentLogPath;
-}
-
 function formatTimestamp(): string {
   return new Date().toISOString();
 }

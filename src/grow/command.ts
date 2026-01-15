@@ -16,10 +16,6 @@ import {
   AgentSession,
 } from "../shared/acp.js";
 
-export interface EndpointWithFieldMapping extends OpenAPIOperation {
-  selectedResponseFields?: string[];
-}
-
 function printHelp() {
   console.log(`Usage: mcp-farmer grow <feature> [options]
 
@@ -190,6 +186,10 @@ async function runAgentWithPrompt(
   } finally {
     agentProcess.kill();
   }
+}
+
+interface EndpointWithFieldMapping extends OpenAPIOperation {
+  selectedResponseFields?: string[];
 }
 
 async function handleOpenApiFeature(): Promise<void> {

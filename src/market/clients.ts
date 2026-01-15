@@ -1,12 +1,6 @@
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-export interface McpClient {
-  id: string;
-  displayName: string;
-  path: string;
-  hint: string;
-}
 
 function getClaudeDesktopPath(): string {
   switch (process.platform) {
@@ -42,6 +36,13 @@ function getClaudeDesktopHint(): string {
     default:
       return "Claude Desktop config";
   }
+}
+
+interface McpClient {
+  id: string;
+  displayName: string;
+  path: string;
+  hint: string;
 }
 
 export const mcpClients: McpClient[] = [
