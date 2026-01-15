@@ -23,7 +23,7 @@ interface ConfigLocation {
   configKey: "mcpServers" | "servers" | "mcp";
 }
 
-function getClaudeDesktopPath(): string {
+export function getClaudeDesktopPath(): string {
   switch (process.platform) {
     case "darwin":
       return join(
@@ -43,6 +43,19 @@ function getClaudeDesktopPath(): string {
       return join(homedir(), ".config", "claude", "config.json");
     default:
       return "";
+  }
+}
+
+export function getClaudeDesktopHint(): string {
+  switch (process.platform) {
+    case "darwin":
+      return "~/Library/Application Support/Claude/claude_desktop_config.json";
+    case "win32":
+      return "%APPDATA%/Claude/claude_desktop_config.json";
+    case "linux":
+      return "~/.config/claude/config.json";
+    default:
+      return "Claude Desktop config";
   }
 }
 
@@ -81,7 +94,7 @@ function getConfigLocations(cwd: string): ConfigLocation[] {
   ];
 }
 
-async function fileExists(path: string): Promise<boolean> {
+export async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path);
     return true;

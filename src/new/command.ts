@@ -3,7 +3,9 @@ import { parseArgs } from "node:util";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { readFile, writeFile, access, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+
+import { fileExists } from "../shared/config.js";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "deno" | "bun";
 
@@ -37,16 +39,7 @@ Examples:
   mcp-farmer new
   mcp-farmer new --name my-server
   mcp-farmer new --name my-server --type local --package-manager bun
-  mcp-farmer new --name my-server --type remote --http-framework hono --deploy docker`);
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
+    mcp-farmer new --name my-server --type remote --http-framework hono --deploy docker`);
 }
 
 function runCommand(

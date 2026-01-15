@@ -10,19 +10,7 @@ import {
   getPropertyType,
   formatType,
 } from "../shared/schema.js";
-
-interface StdioTarget {
-  mode: "stdio";
-  command: string;
-  args: string[];
-}
-
-interface HttpTarget {
-  mode: "http";
-  url: URL;
-}
-
-type TryTarget = StdioTarget | HttpTarget;
+import { parseTarget } from "../shared/target.js";
 
 type CapabilityType = "tools" | "resources";
 
@@ -46,42 +34,6 @@ Examples:
   Stdio mode:
     mcp-farmer try -- node server.js
     mcp-farmer try -- npx -y @modelcontextprotocol/server-memory`);
-}
-
-function parseTarget(args: string[]): {
-  target: TryTarget | null;
-  remainingArgs: string[];
-} {
-  const separatorIndex = args.indexOf("--");
-
-  if (separatorIndex !== -1) {
-    const beforeSeparator = args.slice(0, separatorIndex);
-    const afterSeparator = args.slice(separatorIndex + 1);
-
-    const command = afterSeparator[0];
-    if (!command) {
-      return { target: null, remainingArgs: beforeSeparator };
-    }
-
-    const commandArgs = afterSeparator.slice(1);
-    return {
-      target: { mode: "stdio", command, args: commandArgs },
-      remainingArgs: beforeSeparator,
-    };
-  }
-
-  const firstNonOption = args.find((arg) => !arg.startsWith("-"));
-  if (!firstNonOption) {
-    return { target: null, remainingArgs: args };
-  }
-
-  try {
-    const url = new URL(firstNonOption);
-    const remainingArgs = args.filter((arg) => arg !== firstNonOption);
-    return { target: { mode: "http", url }, remainingArgs };
-  } catch {
-    return { target: null, remainingArgs: args };
-  }
 }
 
 function parseInputValue(value: string, type: string): unknown {

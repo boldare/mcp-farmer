@@ -1,6 +1,5 @@
 import { parseArgs } from "util";
 
-import * as p from "@clack/prompts";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
@@ -20,11 +19,10 @@ import { markdownReporter } from "./reporters/markdown.js";
 import type { Reporter } from "./reporters/shared.js";
 import type { HealthCheckResult } from "./health.js";
 import {
-  discoverServers,
-  parseConfigFile,
-  serverToVetTarget,
-  type McpServerEntry,
-} from "../shared/config.js";
+  parseTarget,
+  resolveTargetFromConfig,
+  type CommandTarget,
+} from "../shared/target.js";
 
 const reporters = {
   console: consoleReporter,
@@ -141,121 +139,6 @@ Examples:
     mcp-farmer vet --output json -- python mcp_server.py`);
 }
 
-interface StdioTarget {
-  mode: "stdio";
-  command: string;
-  args: string[];
-}
-interface HttpTarget {
-  mode: "http";
-  url: URL;
-}
-type VetTarget = StdioTarget | HttpTarget;
-
-function parseTarget(args: string[]): {
-  target: VetTarget | null;
-  remainingArgs: string[];
-} {
-  const separatorIndex = args.indexOf("--");
-
-  if (separatorIndex !== -1) {
-    const beforeSeparator = args.slice(0, separatorIndex);
-    const afterSeparator = args.slice(separatorIndex + 1);
-
-    const command = afterSeparator[0];
-    if (!command) {
-      return { target: null, remainingArgs: beforeSeparator };
-    }
-
-    const commandArgs = afterSeparator.slice(1);
-    return {
-      target: { mode: "stdio", command, args: commandArgs },
-      remainingArgs: beforeSeparator,
-    };
-  }
-
-  // No separator - look for URL in positionals
-  const firstNonOption = args.find((arg) => !arg.startsWith("-"));
-  if (!firstNonOption) {
-    return { target: null, remainingArgs: args };
-  }
-
-  try {
-    const url = new URL(firstNonOption);
-    const remainingArgs = args.filter((arg) => arg !== firstNonOption);
-    return { target: { mode: "http", url }, remainingArgs };
-  } catch {
-    return { target: null, remainingArgs: args };
-  }
-}
-
-async function selectServerFromEntries(
-  entries: McpServerEntry[],
-): Promise<McpServerEntry | null> {
-  if (entries.length === 0) {
-    return null;
-  }
-
-  if (entries.length === 1) {
-    return entries[0] ?? null;
-  }
-
-  const selection = await p.select({
-    message: "Select an MCP server to vet:",
-    options: entries.map((entry) => ({
-      value: entry,
-      label: entry.name,
-      hint: entry.config.url ?? entry.config.command?.toString(),
-    })),
-  });
-
-  if (p.isCancel(selection)) {
-    p.cancel("Operation cancelled.");
-    process.exit(0);
-  }
-
-  return selection;
-}
-
-async function resolveTargetFromConfig(
-  configPath: string | undefined,
-): Promise<VetTarget | null> {
-  let entries: McpServerEntry[];
-
-  if (configPath) {
-    try {
-      entries = await parseConfigFile(configPath);
-    } catch (error) {
-      console.error(`Error reading config file: ${configPath}`);
-      if (error instanceof Error) {
-        console.error(error.message);
-      }
-      process.exit(2);
-    }
-  } else {
-    entries = await discoverServers();
-  }
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  const selected = await selectServerFromEntries(entries);
-  if (!selected) {
-    return null;
-  }
-
-  const target = serverToVetTarget(selected);
-  if (!target) {
-    console.error(
-      `Cannot vet server "${selected.name}": unsupported configuration`,
-    );
-    process.exit(2);
-  }
-
-  return target;
-}
-
 export async function vetCommand(args: string[]) {
   const { target, remainingArgs } = parseTarget(args);
 
@@ -290,10 +173,13 @@ export async function vetCommand(args: string[]) {
     process.exit(0);
   }
 
-  let resolvedTarget = target;
+  let resolvedTarget: CommandTarget | null = target;
 
   if (!resolvedTarget) {
-    resolvedTarget = await resolveTargetFromConfig(values.config);
+    resolvedTarget = await resolveTargetFromConfig(
+      values.config,
+      "Select an MCP server to vet:",
+    );
   }
 
   if (!resolvedTarget) {

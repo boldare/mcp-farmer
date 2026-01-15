@@ -8,12 +8,6 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 import { connect, connectStdio, ConnectionError } from "../shared/mcp.js";
-import {
-  discoverServers,
-  parseConfigFile,
-  serverToVetTarget,
-  type McpServerEntry,
-} from "../shared/config.js";
 import { log, initLog } from "../shared/log.js";
 import { pluralize } from "../shared/text.js";
 import { EvalClient } from "./acp.js";
@@ -22,19 +16,11 @@ import {
   connectAgent,
   AgentSession,
 } from "../shared/acp.js";
-
-interface StdioTarget {
-  mode: "stdio";
-  command: string;
-  args: string[];
-}
-
-interface HttpTarget {
-  mode: "http";
-  url: URL;
-}
-
-type EvalTarget = StdioTarget | HttpTarget;
+import {
+  parseTarget,
+  resolveTargetFromConfig,
+  type CommandTarget,
+} from "../shared/target.js";
 
 function printHelp(): void {
   console.log(`Usage: mcp-farmer eval <url> [options]
@@ -63,111 +49,8 @@ Examples:
     mcp-farmer eval -- npx -y @modelcontextprotocol/server-memory`);
 }
 
-function parseTarget(args: string[]): {
-  target: EvalTarget | null;
-  remainingArgs: string[];
-} {
-  const separatorIndex = args.indexOf("--");
-
-  if (separatorIndex !== -1) {
-    const beforeSeparator = args.slice(0, separatorIndex);
-    const afterSeparator = args.slice(separatorIndex + 1);
-
-    const command = afterSeparator[0];
-    if (!command) {
-      return { target: null, remainingArgs: beforeSeparator };
-    }
-
-    const commandArgs = afterSeparator.slice(1);
-    return {
-      target: { mode: "stdio", command, args: commandArgs },
-      remainingArgs: beforeSeparator,
-    };
-  }
-
-  const firstNonOption = args.find((arg) => !arg.startsWith("-"));
-  if (!firstNonOption) {
-    return { target: null, remainingArgs: args };
-  }
-
-  try {
-    const url = new URL(firstNonOption);
-    const remainingArgs = args.filter((arg) => arg !== firstNonOption);
-    return { target: { mode: "http", url }, remainingArgs };
-  } catch {
-    return { target: null, remainingArgs: args };
-  }
-}
-
-async function selectServerFromEntries(
-  entries: McpServerEntry[],
-): Promise<McpServerEntry | null> {
-  if (entries.length === 0) {
-    return null;
-  }
-
-  if (entries.length === 1) {
-    return entries[0] ?? null;
-  }
-
-  const selection = await p.select({
-    message: "Select an MCP server to evaluate:",
-    options: entries.map((entry) => ({
-      value: entry,
-      label: entry.name,
-      hint: entry.config.url ?? entry.config.command?.toString(),
-    })),
-  });
-
-  if (p.isCancel(selection)) {
-    p.cancel("Operation cancelled.");
-    process.exit(0);
-  }
-
-  return selection as McpServerEntry;
-}
-
-async function resolveTargetFromConfig(
-  configPath: string | undefined,
-): Promise<EvalTarget | null> {
-  let entries: McpServerEntry[];
-
-  if (configPath) {
-    try {
-      entries = await parseConfigFile(configPath);
-    } catch (error) {
-      console.error(`Error reading config file: ${configPath}`);
-      if (error instanceof Error) {
-        console.error(error.message);
-      }
-      process.exit(2);
-    }
-  } else {
-    entries = await discoverServers();
-  }
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  const selected = await selectServerFromEntries(entries);
-  if (!selected) {
-    return null;
-  }
-
-  const target = serverToVetTarget(selected);
-  if (!target) {
-    console.error(
-      `Cannot evaluate server "${selected.name}": unsupported configuration`,
-    );
-    process.exit(2);
-  }
-
-  return target as EvalTarget;
-}
-
 function buildMcpServerConfig(
-  target: EvalTarget,
+  target: CommandTarget,
   serverName: string,
 ): acp.McpServer {
   if (target.mode === "http") {
@@ -272,7 +155,7 @@ Begin by calling each tool with your generated test inputs, then write the markd
 }
 
 async function runEval(
-  target: EvalTarget,
+  target: CommandTarget,
   tools: Tool[],
   serverName: string,
 ): Promise<void> {
@@ -382,10 +265,13 @@ export async function evalCommand(args: string[]) {
     process.exit(0);
   }
 
-  let resolvedTarget = target;
+  let resolvedTarget: CommandTarget | null = target;
 
   if (!resolvedTarget) {
-    resolvedTarget = await resolveTargetFromConfig(values.config as string);
+    resolvedTarget = await resolveTargetFromConfig(
+      values.config as string,
+      "Select an MCP server to evaluate:",
+    );
   }
 
   if (!resolvedTarget) {
