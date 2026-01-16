@@ -7,7 +7,7 @@ interface ResponseField {
   required: boolean;
 }
 
-export interface ParameterInfo {
+interface ParameterInfo {
   name: string;
   type: string;
   location: string;

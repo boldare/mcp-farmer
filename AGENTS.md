@@ -82,8 +82,7 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
     - `helpers/spawn.ts` - Helper to spawn CLI process and capture stdout/stderr
     - `new.test.ts` - Integration tests for the new command
     - `vet.test.ts` - Integration tests for the vet command
-  - `testdata/` - Test fixtures
-    - `petstore-swagger.json` - Sample OpenAPI spec for testing grow command
+  - `testdata/` - Test fixtures like example openapi files
 
 ## Vet Command Flow
 

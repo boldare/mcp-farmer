@@ -62,7 +62,7 @@ export function cancel(msg: string) {
 }
 
 // Check if error is a user cancellation (Ctrl+C)
-export function isExitError(error: unknown): boolean {
+function isExitError(error: unknown): boolean {
   return error instanceof Error && error.name === "ExitPromptError";
 }
 

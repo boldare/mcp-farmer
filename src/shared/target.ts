@@ -1,18 +1,17 @@
 import {
   discoverServers,
   parseConfigFile,
-  serverToVetTarget,
   type McpServerEntry,
 } from "./config.js";
 import { select, handleCancel } from "./prompts.js";
 
-export interface StdioTarget {
+interface StdioTarget {
   mode: "stdio";
   command: string;
   args: string[];
 }
 
-export interface HttpTarget {
+interface HttpTarget {
   mode: "http";
   url: URL;
 }
@@ -63,7 +62,7 @@ export function parseTarget(args: string[]): {
   }
 }
 
-export async function selectServerFromEntries(
+async function selectServerFromEntries(
   entries: McpServerEntry[],
   message = "Select an MCP server:",
 ): Promise<McpServerEntry | null> {
@@ -89,6 +88,39 @@ export async function selectServerFromEntries(
   } catch (error) {
     handleCancel(error);
   }
+}
+
+function mapServerToDCommandTarget(
+  entry: McpServerEntry,
+): CommandTarget | null {
+  const { config } = entry;
+
+  // HTTP mode
+  if (config.url) {
+    try {
+      return { mode: "http", url: new URL(config.url) };
+    } catch {
+      return null;
+    }
+  }
+
+  // Stdio mode
+  if (config.command) {
+    if (Array.isArray(config.command)) {
+      // OpenCode style: command is an array
+      const [cmd, ...cmdArgs] = config.command;
+      if (!cmd) return null;
+      return { mode: "stdio", command: cmd, args: cmdArgs };
+    }
+    // Standard style: command is string, args is array
+    return {
+      mode: "stdio",
+      command: config.command,
+      args: config.args ?? [],
+    };
+  }
+
+  return null;
 }
 
 export async function resolveTargetFromConfig(
@@ -131,7 +163,7 @@ export async function resolveTargetFromConfig(
     return null;
   }
 
-  const target = serverToVetTarget(selected);
+  const target = mapServerToDCommandTarget(selected);
   if (!target) {
     console.error(
       `Cannot use server "${selected.name}": unsupported configuration`,

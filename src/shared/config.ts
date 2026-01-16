@@ -153,39 +153,3 @@ export async function discoverServers(): Promise<McpServerEntry[]> {
 
   return servers;
 }
-
-export function serverToVetTarget(
-  entry: McpServerEntry,
-):
-  | { mode: "http"; url: URL }
-  | { mode: "stdio"; command: string; args: string[] }
-  | null {
-  const { config } = entry;
-
-  // HTTP mode
-  if (config.url) {
-    try {
-      return { mode: "http", url: new URL(config.url) };
-    } catch {
-      return null;
-    }
-  }
-
-  // Stdio mode
-  if (config.command) {
-    if (Array.isArray(config.command)) {
-      // OpenCode style: command is an array
-      const [cmd, ...cmdArgs] = config.command;
-      if (!cmd) return null;
-      return { mode: "stdio", command: cmd, args: cmdArgs };
-    }
-    // Standard style: command is string, args is array
-    return {
-      mode: "stdio",
-      command: config.command,
-      args: config.args ?? [],
-    };
-  }
-
-  return null;
-}
