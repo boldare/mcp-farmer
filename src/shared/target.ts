@@ -4,6 +4,7 @@ import {
   type McpServerEntry,
 } from "./config.js";
 import { select, handleCancel } from "./prompts.js";
+import { ConfigError } from "./errors.js";
 
 interface StdioTarget {
   mode: "stdio";
@@ -17,6 +18,27 @@ interface HttpTarget {
 }
 
 export type CommandTarget = StdioTarget | HttpTarget;
+
+function tryParseHttpUrl(raw: string): URL | null {
+  // Common UX: users paste `localhost:3000/mcp` (no scheme). Treat it as http.
+  const looksLikeHostWithPort =
+    !raw.includes("://") && /^[^/\s]+:\d+(\/.*)?$/.test(raw);
+  if (looksLikeHostWithPort) {
+    try {
+      return new URL(`http://${raw}`);
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "http:" || url.protocol === "https:") return url;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export function parseTarget(args: string[]): {
   target: CommandTarget | null;
@@ -50,16 +72,16 @@ export function parseTarget(args: string[]): {
     return { target: null, remainingArgs: args };
   }
 
-  try {
-    const url = new URL(firstNonOption);
+  const url = tryParseHttpUrl(firstNonOption);
+  if (url) {
     const remainingArgs = [
       ...args.slice(0, firstNonOptionIndex),
       ...args.slice(firstNonOptionIndex + 1),
     ];
     return { target: { mode: "http", url }, remainingArgs };
-  } catch {
-    return { target: null, remainingArgs: args };
   }
+
+  return { target: null, remainingArgs: args };
 }
 
 async function selectServerFromEntries(
@@ -87,6 +109,7 @@ async function selectServerFromEntries(
     return selection;
   } catch (error) {
     handleCancel(error);
+    return null;
   }
 }
 
@@ -138,14 +161,12 @@ export async function resolveTargetFromConfig(
         );
       }
     } catch (error) {
-      console.error(`Error reading config file: ${configPath}`);
-      if (error instanceof Error) {
-        console.error(error.message);
-      }
-      console.warn(
-        "The config file may be corrupted or contain invalid JSON. Please check the file.",
+      const details = error instanceof Error ? error.message : String(error);
+      throw new ConfigError(
+        `Error reading config file: ${configPath}\n` +
+          `${details}\n` +
+          "The config file may be corrupted or contain invalid JSON. Please check the file.",
       );
-      process.exit(2);
     }
   } else {
     entries = await discoverServers();
@@ -165,10 +186,9 @@ export async function resolveTargetFromConfig(
 
   const target = mapServerToDCommandTarget(selected);
   if (!target) {
-    console.error(
+    throw new ConfigError(
       `Cannot use server "${selected.name}": unsupported configuration`,
     );
-    process.exit(2);
   }
 
   return target;

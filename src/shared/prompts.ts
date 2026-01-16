@@ -2,6 +2,7 @@
 import { input, select, checkbox, confirm, search } from "@inquirer/prompts";
 import ora, { type Ora } from "ora";
 import chalk from "chalk";
+import { UserCancelledError } from "./errors.js";
 
 // Re-export prompts
 export { input, select, checkbox, confirm, search };
@@ -32,8 +33,8 @@ export function spinner(): SpinnerInstance {
 // Logging utilities using chalk
 export const log = {
   info: (msg: string) => console.log(chalk.blue("i"), msg),
-  warn: (msg: string) => console.log(chalk.yellow("!"), msg),
-  error: (msg: string) => console.log(chalk.red("x"), msg),
+  warn: (msg: string) => console.warn(chalk.yellow("!"), msg),
+  error: (msg: string) => console.error(chalk.red("x"), msg),
   step: (msg: string) => console.log(chalk.cyan(">"), msg),
   message: (msg: string) => console.log(msg),
 };
@@ -58,7 +59,7 @@ export function note(content: string, title?: string) {
 }
 
 export function cancel(msg: string) {
-  console.log(chalk.red("x"), msg);
+  console.error(chalk.red("x"), msg);
 }
 
 // Check if error is a user cancellation (Ctrl+C)
@@ -70,7 +71,7 @@ function isExitError(error: unknown): boolean {
 export function handleCancel(error: unknown): never {
   if (isExitError(error)) {
     cancel("Operation cancelled.");
-    process.exit(0);
+    throw new UserCancelledError();
   }
   throw error;
 }

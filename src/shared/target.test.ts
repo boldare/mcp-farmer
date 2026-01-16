@@ -37,7 +37,21 @@ describe("parseTarget", () => {
     expect(remainingArgs).toEqual(["--verbose", "--foo"]);
     expect(target?.mode).toBe("http");
     if (target?.mode === "http") {
-      expect(target.url).toEqual(new URL("http://localhost:3000"));
+      expect(target.url.href).toBe("http://localhost:3000/");
+    }
+  });
+
+  test("parses http target from host:port without scheme", () => {
+    const { target, remainingArgs } = parseTarget([
+      "--verbose",
+      "localhost:3000/mcp",
+      "--foo",
+    ]);
+
+    expect(remainingArgs).toEqual(["--verbose", "--foo"]);
+    expect(target?.mode).toBe("http");
+    if (target?.mode === "http") {
+      expect(target.url.href).toBe("http://localhost:3000/mcp");
     }
   });
 

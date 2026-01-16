@@ -8,6 +8,11 @@ import { marketCommand } from "./src/market/command.js";
 import { tryCommand } from "./src/try/command.js";
 import { growCommand } from "./src/grow/command.js";
 import { probeCommand } from "./src/probe/command.js";
+import {
+  getExitCode,
+  isUserCancelledError,
+  type ExitCode,
+} from "./src/shared/errors.js";
 
 function getVersion(): string {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -79,8 +84,14 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(
-    `Error: ${error instanceof Error ? error.message : String(error)}`,
-  );
-  process.exit(2);
+  const exitCode = getExitCode(error);
+
+  // Cancellation is a normal, user-initiated control-flow; avoid double-printing.
+  if (!isUserCancelledError(error)) {
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  process.exit(exitCode satisfies ExitCode);
 });

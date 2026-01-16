@@ -21,18 +21,18 @@ describe("grow command", () => {
     });
 
     test("exits with code 2 when no feature provided", async () => {
-      const { exitCode, stdout } = await runCli(["grow"]);
+      const { exitCode, stderr } = await runCli(["grow"]);
 
       expect(exitCode).toBe(2);
-      expect(stdout).toContain("Please provide a feature");
+      expect(stderr).toContain("Please provide a feature");
     });
 
     test("exits with code 2 for invalid feature", async () => {
-      const { exitCode, stdout } = await runCli(["grow", "invalid-feature"]);
+      const { exitCode, stderr } = await runCli(["grow", "invalid-feature"]);
 
       expect(exitCode).toBe(2);
-      expect(stdout).toContain("Invalid feature");
-      expect(stdout).toContain("openapi, graphql");
+      expect(stderr).toContain("Invalid feature");
+      expect(stderr).toContain("openapi, graphql");
     });
 
     test("accepts unknown arguments without error", async () => {

@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 
 import { servers } from "./servers.js";
 import { mcpClients } from "./clients.js";
+import type { McpServerConfig } from "../shared/config.js";
 import {
   select,
   confirm,
@@ -61,14 +62,6 @@ function getConfigKey(clientId: string): "mcpServers" | "servers" | "mcp" {
   if (clientId === "vscode") return "servers";
   if (clientId === "opencode") return "mcp";
   return "mcpServers";
-}
-
-interface McpServerConfig {
-  command?: string | string[];
-  args?: string[];
-  url?: string;
-  type?: "http" | "stdio" | "local" | "remote";
-  enabled?: boolean;
 }
 
 function buildServerConfig(

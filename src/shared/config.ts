@@ -17,10 +17,12 @@ export interface McpServerConfig {
   env?: Record<string, string>;
 }
 
+type ConfigKey = "mcpServers" | "servers" | "mcp";
+
 interface ConfigLocation {
   path: string;
   hint: string;
-  configKey: "mcpServers" | "servers" | "mcp";
+  configKey: ConfigKey;
 }
 
 export function getClaudeDesktopPath(): string {
@@ -105,32 +107,57 @@ export async function fileExists(path: string): Promise<boolean> {
 
 export async function parseConfigFile(
   configPath: string,
-  configKey?: "mcpServers" | "servers" | "mcp",
+  configKey?: ConfigKey,
 ): Promise<McpServerEntry[]> {
   const content = await readFile(configPath, "utf-8");
-  const config = JSON.parse(content);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid JSON: ${details}`);
+  }
+
+  if (!isRecord(parsed)) {
+    console.warn(
+      `Warning: MCP config file is not an object, skipping: ${configPath}`,
+    );
+    return [];
+  }
 
   // Auto-detect config key if not provided
   const key =
     configKey ??
-    (config.mcpServers
+    ("mcpServers" in parsed
       ? "mcpServers"
-      : config.servers
+      : "servers" in parsed
         ? "servers"
-        : config.mcp
+        : "mcp" in parsed
           ? "mcp"
           : null);
 
-  if (!key || !config[key]) {
+  if (!key) {
     return [];
   }
 
-  const servers = config[key] as Record<string, McpServerConfig>;
-  return Object.entries(servers).map(([name, serverConfig]) => ({
-    name,
-    config: serverConfig,
-    source: configPath,
-  }));
+  const serversRaw = parsed[key];
+  if (!isRecord(serversRaw)) {
+    console.warn(
+      `Warning: MCP config key "${key}" is not an object, skipping: ${configPath}`,
+    );
+    return [];
+  }
+
+  const entries: McpServerEntry[] = [];
+
+  for (const [name, serverUnknown] of Object.entries(serversRaw)) {
+    const config = parseServerConfig(serverUnknown, configPath, name);
+    if (!config) continue;
+    entries.push({ name, config, source: configPath });
+  }
+
+  return entries;
 }
 
 export async function discoverServers(): Promise<McpServerEntry[]> {
@@ -145,11 +172,135 @@ export async function discoverServers(): Promise<McpServerEntry[]> {
           location.configKey,
         );
         servers.push(...entries);
-      } catch {
-        // Skip invalid config files
+      } catch (error) {
+        const details = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `Warning: Skipping invalid MCP config file (${location.hint}): ${location.path}\n` +
+            `${details}`,
+        );
       }
     }
   }
 
   return servers;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseServerConfig(
+  raw: unknown,
+  sourcePath: string,
+  name: string,
+): McpServerConfig | null {
+  if (!isRecord(raw)) {
+    console.warn(
+      `Warning: Skipping server "${name}" in ${sourcePath}: expected an object`,
+    );
+    return null;
+  }
+
+  const url = typeof raw.url === "string" ? raw.url : undefined;
+  if (raw.url !== undefined && url === undefined) {
+    console.warn(
+      `Warning: Ignoring invalid "url" for server "${name}" in ${sourcePath}: expected string`,
+    );
+  }
+
+  const command = parseCommand(raw.command);
+  if (raw.command !== undefined && command === undefined) {
+    console.warn(
+      `Warning: Ignoring invalid "command" for server "${name}" in ${sourcePath}: expected string or string[]`,
+    );
+  }
+
+  const args = parseStringArray(raw.args);
+  if (raw.args !== undefined && args === undefined) {
+    console.warn(
+      `Warning: Ignoring invalid "args" for server "${name}" in ${sourcePath}: expected string[]`,
+    );
+  }
+
+  const enabled = typeof raw.enabled === "boolean" ? raw.enabled : undefined;
+  if (raw.enabled !== undefined && enabled === undefined) {
+    console.warn(
+      `Warning: Ignoring invalid "enabled" for server "${name}" in ${sourcePath}: expected boolean`,
+    );
+  }
+
+  const type = parseType(raw.type);
+  if (raw.type !== undefined && type === undefined) {
+    console.warn(
+      `Warning: Ignoring invalid "type" for server "${name}" in ${sourcePath}: expected one of http|stdio|local|remote|sse`,
+    );
+  }
+
+  const env = parseEnv(raw.env, sourcePath, name);
+  if (raw.env !== undefined && env === undefined) {
+    console.warn(
+      `Warning: Ignoring invalid "env" for server "${name}" in ${sourcePath}: expected record of strings`,
+    );
+  }
+
+  if (!url && !command) {
+    console.warn(
+      `Warning: Skipping server "${name}" in ${sourcePath}: missing "url" or "command"`,
+    );
+    return null;
+  }
+
+  return {
+    url,
+    command,
+    args,
+    enabled,
+    type,
+    env,
+  };
+}
+
+function parseStringArray(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return undefined;
+  if (!value.every((v) => typeof v === "string")) return undefined;
+  return value;
+}
+
+function parseCommand(value: unknown): string | string[] | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "string") return value;
+  const arr = parseStringArray(value);
+  return arr;
+}
+
+function parseType(value: unknown): McpServerConfig["type"] | undefined {
+  if (value === undefined) return undefined;
+  if (value === "http") return "http";
+  if (value === "stdio") return "stdio";
+  if (value === "local") return "local";
+  if (value === "remote") return "remote";
+  if (value === "sse") return "sse";
+  return undefined;
+}
+
+function parseEnv(
+  value: unknown,
+  sourcePath: string,
+  name: string,
+): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return undefined;
+
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (typeof v === "string") {
+      env[k] = v;
+    } else {
+      console.warn(
+        `Warning: Skipping env var "${k}" for server "${name}" in ${sourcePath}: expected string value`,
+      );
+    }
+  }
+  return env;
 }

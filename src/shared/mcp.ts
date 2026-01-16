@@ -6,6 +6,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 
 import type { CliOAuthProvider } from "./oauth.js";
+import { CLI_VERSION } from "./version.js";
 
 export class AuthenticationRequiredError extends Error {
   statusCode: number;
@@ -91,12 +92,25 @@ function isAuthError(error: unknown): boolean {
 
 const NETWORK_TIMEOUT_MS = 30000; // 30 seconds
 
+async function safeCloseTransport(transport: Transport): Promise<void> {
+  try {
+    const maybeClose = (transport as unknown as { close?: () => unknown })
+      .close;
+    if (typeof maybeClose === "function") {
+      await maybeClose.call(transport);
+    }
+  } catch {
+    // Best-effort cleanup; ignore close errors.
+  }
+}
+
 async function fetchAuthDetails(
   url: URL,
 ): Promise<{ authHeader?: string; errorDescription?: string }> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
+    timeoutId.unref?.();
 
     try {
       const response = await fetch(url, {
@@ -127,18 +141,21 @@ async function tryConnect(
 ): Promise<Transport> {
   const transport = new TransportClass(url, { authProvider });
 
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
   try {
     const connectPromise = client.connect(transport);
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(
+      timeoutId = setTimeout(
         () => reject(new Error("Connection timed out after 30 seconds")),
         NETWORK_TIMEOUT_MS,
       );
+      timeoutId.unref?.();
     });
 
     await Promise.race([connectPromise, timeoutPromise]);
     return transport;
   } catch (error) {
+    await safeCloseTransport(transport);
     if (!(error instanceof UnauthorizedError) || !authProvider) {
       throw error;
     }
@@ -146,9 +163,16 @@ async function tryConnect(
     // OAuth flow triggered - wait for callback and retry
     const code = await authProvider.waitForAuthorizationCode();
     const retryTransport = new TransportClass(url, { authProvider });
-    await retryTransport.finishAuth(code);
-    await client.connect(retryTransport);
-    return retryTransport;
+    try {
+      await retryTransport.finishAuth(code);
+      await client.connect(retryTransport);
+      return retryTransport;
+    } catch (retryError) {
+      await safeCloseTransport(retryTransport);
+      throw retryError;
+    }
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 
@@ -156,7 +180,7 @@ export async function connect(
   url: URL,
   authProvider?: CliOAuthProvider,
 ): Promise<{ client: Client; transport: Transport }> {
-  const client = new Client({ name: "mcp-farmer", version: "1.0.0" });
+  const client = new Client({ name: "mcp-farmer", version: CLI_VERSION });
 
   // Try StreamableHTTP first
   try {
@@ -212,13 +236,14 @@ export async function connectStdio(
   command: string,
   args: string[],
 ): Promise<{ client: Client; transport: Transport }> {
-  const client = new Client({ name: "mcp-farmer", version: "1.0.0" });
+  const client = new Client({ name: "mcp-farmer", version: CLI_VERSION });
   const transport = new StdioClientTransport({ command, args });
 
   try {
     await client.connect(transport);
     return { client, transport };
   } catch (error) {
+    await safeCloseTransport(transport);
     if (error instanceof Error) {
       const message = error.message.toLowerCase();
 
