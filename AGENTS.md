@@ -57,12 +57,14 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 - Exit codes: 0 (success/pass), 1 (findings/fail), 2 (invalid usage/error)
 - Errors to stderr, results to stdout
 - Provide actionable error messages
+- Prefer throwing typed errors from shared code and mapping to exit codes at the CLI boundary (`cli.ts`)
 
 ## Error Handling
 
 - Catch errors at boundaries and convert to user-friendly messages
 - Use try/finally to ensure connections and resources are cleaned up
 - Set timeouts on all network operations
+- Avoid `process.exit()` in shared/library modules (`src/shared/**`); only exit from CLI entrypoints/commands
 
 ## File Structure
 
@@ -76,6 +78,8 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
   - `schema.ts` - Tool schema extraction and type formatting utilities
   - `text.ts` - Text utilities (pluralization)
   - `log.ts` - Debug logging to file
+  - `errors.ts` - Typed CLI errors + exit-code mapping helpers used by entrypoints
+  - `version.ts` - CLI version resolution (from `package.json`) for both dev and built (`dist/`) layouts
 - `src/vet/` - Vet command: connects to MCP servers and runs quality checks on exposed tools
   - `command.ts` - Vet command logic: parses args, orchestrates MCP connection, runs checks, outputs results
   - `tools.ts` - Tool analysis checkers: validates descriptions, input/output schemas, input counts, and detects duplicate tool names

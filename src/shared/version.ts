@@ -1,24 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-function findUp(startDir: string, fileName: string): string | null {
-  let dir = startDir;
-  for (let i = 0; i < 8; i++) {
-    const candidate = join(dir, fileName);
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
-}
-
-function readCliVersion(): string {
+function tryReadVersion(packageJsonPath: string): string | null {
+  if (!existsSync(packageJsonPath)) return null;
   try {
-    const startDir = dirname(fileURLToPath(import.meta.url));
-    const packageJsonPath = findUp(startDir, "package.json");
-    if (!packageJsonPath) return "unknown";
     const parsed: unknown = JSON.parse(readFileSync(packageJsonPath, "utf8"));
     if (
       typeof parsed === "object" &&
@@ -28,10 +14,16 @@ function readCliVersion(): string {
     ) {
       return (parsed as { version: string }).version;
     }
-    return "unknown";
   } catch {
-    return "unknown";
+    // ignore
   }
+  return null;
 }
 
-export const CLI_VERSION = readCliVersion();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Supports both dev (`src/shared/version.ts`) and built (`dist/src/shared/version.js`) layouts.
+export const CLI_VERSION =
+  tryReadVersion(resolve(__dirname, "..", "..", "package.json")) ??
+  tryReadVersion(resolve(__dirname, "..", "..", "..", "package.json")) ??
+  "unknown";

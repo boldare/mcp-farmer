@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { vetCommand } from "./src/vet/command.js";
 import { newCommand } from "./src/new/command.js";
 import { marketCommand } from "./src/market/command.js";
@@ -13,13 +10,7 @@ import {
   isUserCancelledError,
   type ExitCode,
 } from "./src/shared/errors.js";
-
-function getVersion(): string {
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const packageJsonPath = resolve(__dirname, "..", "package.json");
-  const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"));
-  return pkg.version;
-}
+import { CLI_VERSION } from "./src/shared/version.js";
 
 function printHelp() {
   console.log(`Usage: mcp-farmer <command> [options]
@@ -51,7 +42,7 @@ async function main() {
   }
 
   if (command === "--version" || command === "-v") {
-    console.log(getVersion());
+    console.log(CLI_VERSION);
     process.exit(0);
   }
 
