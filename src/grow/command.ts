@@ -5,6 +5,7 @@ import {
   type GraphQLOperationWithFieldMapping,
 } from "./graphql.js";
 import { CodingClient } from "./acp.js";
+import { buildOpenAPIPrompt, buildGraphQLPrompt } from "./prompts.js";
 import { log, initLog } from "../shared/log.js";
 import { pluralize } from "../shared/text.js";
 import {
@@ -329,33 +330,10 @@ async function handleOpenApiFeature(): Promise<void> {
 
   log("selected_agent", agentChoice);
 
-  const promptText = `Your job is to generate MCP tools from the OpenAPI specification. You will be given a list of endpoints and you will need to generate a tool for each endpoint.
-
-## Steps
-1. Read current directory to see how the tools are structured and registered in the server instance
-2. Identify any existing patterns in the codebase to follow
-3. Confirm no duplicate tool names exist in the codebase
-4. Generate the tool for each selected endpoint
-5. Register the tool using the server instance
-
-## Rules
-- Place each tool in the tools directory as a separate file unless there is already another pattern in the project then you should follow it
-- Each function should accept a server instance argument and register the tool using the server instance.
-- You should make a fetch request for each endpoint.
-- You can take the base url from API_BASE_URL environment variable.
-- Use Zod schema for describing tool input and output.
-- Every input parameter must have a .describe() in the Zod schema, if not provided from endpoint description use a useful but short description.
-- Return only fields that are selected in the tool output.
-- Add tool annotations: { readOnlyHint: true } for GET requests, { destructiveHint: true } for DELETE
-
-<current-directory>
-${process.cwd()}
-</current-directory>
-
-<endpoints>
-${JSON.stringify(endpointsWithMapping, null, 2)}
-</endpoints>
-`;
+  const promptText = buildOpenAPIPrompt({
+    cwd: process.cwd(),
+    endpoints: JSON.stringify(endpointsWithMapping, null, 2),
+  });
 
   await runAgentWithPrompt(
     agentChoice,
@@ -496,33 +474,10 @@ async function handleGraphQLFeature(): Promise<void> {
 
   log("selected_agent", agentChoice);
 
-  const promptText = `Your job is to generate MCP tools from the GraphQL schema. You will be given a list of operations (queries and mutations) and you will need to generate a tool for each operation.
-
-## Steps
-1. Read current directory to see how the tools are structured and registered in the server instance
-2. Identify any existing patterns in the codebase to follow
-3. Confirm no duplicate tool names exist in the codebase
-4. Generate the tool for each selected operation
-5. Register the tool using the server instance
-
-## Rules
-- Place each tool in the tools directory as a separate file unless there is already another pattern in the project then you should follow it
-- Each function should accept a server instance argument and register the tool using the server instance.
-- Make a GraphQL request for each operation.
-- Take the GraphQL endpoint from GRAPHQL_ENDPOINT environment variable.
-- Use Zod schema for describing tool input and output.
-- Every input parameter must have a .describe() in the Zod schema, if not provided from operation description use a useful but short description.
-- Return only fields that are selected in the tool output (selectedReturnFields).
-- Add tool annotations: { readOnlyHint: true } for queries, { destructiveHint: true } for mutations with "delete" in name
-
-<current-directory>
-${process.cwd()}
-</current-directory>
-
-<operations>
-${JSON.stringify(selectedOperations, null, 2)}
-</operations>
-`;
+  const promptText = buildGraphQLPrompt({
+    cwd: process.cwd(),
+    operations: JSON.stringify(selectedOperations, null, 2),
+  });
 
   await runAgentWithPrompt(agentChoice, promptText, selectedOperations.length);
 }
