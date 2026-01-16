@@ -219,7 +219,7 @@ export async function marketCommand(args: string[]) {
 
     if (!confirmSave) {
       outro("Configuration not saved.");
-      return;
+      process.exit(0);
     }
   } catch (error) {
     handleCancel(error);
@@ -243,6 +243,8 @@ export async function marketCommand(args: string[]) {
         `  mcp-farmer try   Test the installed server\n` +
         `  mcp-farmer vet   Check the server's quality`,
     );
+
+    process.exit(0);
   } catch (error) {
     s.stop("Failed to save configuration");
     const message = error instanceof Error ? error.message : String(error);

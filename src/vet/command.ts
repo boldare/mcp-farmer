@@ -234,7 +234,7 @@ export async function vetCommand(args: string[]) {
     );
 
     await runVet(client, transport, reporter, targetDisplay, null);
-    return;
+    process.exit(0);
   }
 
   // HTTP mode
@@ -297,4 +297,6 @@ export async function vetCommand(args: string[]) {
     resolvedTarget.url.toString(),
     health,
   );
+
+  process.exit(0);
 }

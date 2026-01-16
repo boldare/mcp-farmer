@@ -549,4 +549,6 @@ docker run -p 3000:3000 ${name}
       `  mcp-farmer vet            Validate your server's tools\n` +
       `  mcp-farmer try            Test your tools interactively`,
   );
+
+  process.exit(0);
 }

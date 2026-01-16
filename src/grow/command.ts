@@ -195,6 +195,8 @@ async function runAgentWithPrompt(
       );
       log("session_completed", promptResult.stopReason);
     }
+
+    process.exit(0);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     promptLog.error(`Something went wrong: ${message}`);

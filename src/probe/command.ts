@@ -237,6 +237,8 @@ async function runProbe(
       outro("Probe complete.");
       log("session_completed", promptResult.stopReason);
     }
+
+    process.exit(0);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     promptLog.error(`Something went wrong: ${message}`);
@@ -337,7 +339,7 @@ export async function probeCommand(args: string[]) {
     if (tools.length === 0) {
       promptLog.warn("No tools available on this server.");
       await transport.close();
-      return;
+      process.exit(0);
     }
 
     promptLog.info(`Found ${tools.length} tool(s)`);

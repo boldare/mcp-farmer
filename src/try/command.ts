@@ -376,6 +376,8 @@ export async function tryCommand(args: string[]) {
     outro("Done");
 
     log.message(`What's next?\n` + `  mcp-farmer vet   Get a full report`);
+
+    process.exit(0);
   } catch (error) {
     s.stop("Connection failed");
     if (error instanceof ConnectionError) {
