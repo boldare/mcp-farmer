@@ -1,10 +1,40 @@
-# mcp-farmer
+## mcp-farmer
 
 [![npm version](https://badge.fury.io/js/mcp-farmer.svg)](https://badge.fury.io/js/mcp-farmer)
 
-A CLI tool for scaffolding, extending and analyzing MCP (Model Context Protocol) servers.
+A CLI tool for scaffolding, extending, probing, and auditing MCP (Model Context Protocol) servers.
 
 While this tool is stable and ready to be used you can expect new features and improvements coming soon™.
+
+## Why mcp-farmer?
+
+- **Ship MCP servers faster**: scaffold a server, generate tools from OpenAPI/GraphQL, and validate tool quality.
+- **Trust but verify**: vet third‑party MCP servers (including `/health`, tools, prompts, and resources) before adding them to your client.
+- **Better tool UX for LLMs**: catch missing descriptions/schemas/annotations and other issues that reduce reliability.
+- **Shareable outputs**: generate **HTML/JSON/Markdown** vet reports and a **Markdown probe report** you can attach to PRs/issues.
+
+## Highlights
+
+- **Targets**: connect via **HTTP URL** or **stdio command** (after `--`).
+- **Robust HTTP connect**: tries Streamable HTTP first, falls back to SSE, with timeouts and actionable errors.
+- **Auto-detect from config**: discovers MCP servers from common client configs and lets you pick one interactively.
+- **OAuth support (HTTP)**: `vet` can run an OAuth browser flow via `--oauth` (configurable `--oauth-port`).
+- **Interactive exploration**: `try` can call **tools** and read **resources**.
+- **AI-assisted workflows**: `grow` generates tools; `probe` calls tools with AI-generated inputs and writes a report.
+
+## What is MCP?
+
+MCP (Model Context Protocol) is a standard way for LLM apps/agents to connect to “capabilities” exposed by servers — typically **tools**, **resources**, and **prompts** — over transports like **HTTP** or **stdio**. Clients can discover what a server offers (schemas + descriptions), then call those capabilities in a structured way.
+
+If you’re new to MCP, start here: [Model Context Protocol](https://modelcontextprotocol.io).
+
+## What is ACP?
+
+ACP (Agent Client Protocol) is a protocol for driving “coding agents” from a CLI/app in a consistent way (start a session, stream updates, request permissions, read/write files, and optionally select models). `mcp-farmer` uses ACP for commands like `grow` and `probe` so it can work with multiple agents (e.g. OpenCode, Claude Code, Gemini CLI, GitHub Copilot CLI) **without reinventing a bespoke integration per agent**.
+
+## Quick Start
+
+**Requirements:** Node.js **>= 20**.
 
 ```
 Usage: mcp-farmer <command> [options]
@@ -21,12 +51,36 @@ Options:
   --help       Show this help message
 ```
 
-## Quick Start
+Global install:
 
 ```bash
-npx mcp-farmer <command>
+npm install -g mcp-farmer
 # or
-bunx mcp-farmer <command>
+bun add -g mcp-farmer
+```
+
+No install for quick tests:
+
+```bash
+npx mcp-farmer try http://localhost:3000/mcp
+bunx mcp-farmer try http://localhost:3000/mcp
+npx mcp-farmer vet http://localhost:3000/mcp
+bunx mcp-farmer vet http://localhost:3000/mcp
+```
+
+Common workflows:
+
+```bash
+# Vet and export a shareable report
+mcp-farmer vet http://localhost:3000/mcp --output markdown > report.md
+mcp-farmer vet http://localhost:3000/mcp --output html > report.html
+
+# If the server requires auth (HTTP)
+mcp-farmer vet https://secure-server.com/mcp --oauth
+
+# Stdio mode (spawn a local server process)
+mcp-farmer vet -- npx -y @modelcontextprotocol/server-memory
+mcp-farmer try -- npx -y @modelcontextprotocol/server-memory
 ```
 
 ## Commands
@@ -54,6 +108,8 @@ mcp-farmer try http://localhost:3000/mcp              # HTTP
 mcp-farmer try -- npx -y @modelcontextprotocol/server-memory  # Stdio
 ```
 
+Interactively calls tools and (when supported) lets you read server resources.
+
 ### `grow` — Generate MCP tools from API specs
 
 ```bash
@@ -62,6 +118,8 @@ mcp-farmer grow graphql   # Generate tools from GraphQL endpoint
 ```
 
 Parses your API specification, lets you select endpoints/operations and response fields, then uses an AI coding agent (OpenCode, Claude Code, or Gemini CLI) via ACP to generate the MCP tool code.
+
+**Note:** `grow` requires at least one supported ACP agent to be installed (you’ll select one in the CLI).
 
 ### `probe` — Test MCP tools with AI
 
@@ -91,9 +149,19 @@ mcp-farmer vet -o html -- bunx @playwright/mcp > report.html
 
 Auto-detects MCP servers from local config files (Cursor, VS Code, Claude Desktop, Claude Code, OpenCode, Gemini CLI). If multiple servers are found, prompts you to select one.
 
-**Options:** `-c, --config <path>`, `-o, --output json|html`, `--oauth`, `--oauth-port <port>`
+**Options:** `-c, --config <path>`, `-o, --output json|html|markdown`, `--oauth`, `--oauth-port <port>`
 
-**Checks:** missing descriptions, missing schemas, too many inputs (>5), too many tools (>30), duplicates, similar descriptions, dangerous tool names.
+**Checks:**
+
+- Missing tool descriptions
+- Missing input/output schemas
+- Too many inputs (>5)
+- Too many tools (>30)
+- Duplicate tool names
+- Similar tool descriptions
+- Dangerous tool names
+- Missing tool annotations (readOnlyHint/idempotentHint/openWorldHint/destructiveHint)
+- Potential PII handling indicators (name/description/input hints)
 
 ## Development
 
