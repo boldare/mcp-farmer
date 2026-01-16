@@ -7,6 +7,58 @@ interface ResponseField {
   required: boolean;
 }
 
+export interface ParameterInfo {
+  name: string;
+  type: string;
+  location: string;
+  required: boolean;
+  description?: string;
+}
+
+interface OpenAPIParameter {
+  name?: string;
+  in?: string;
+  required?: boolean;
+  type?: string;
+  description?: string;
+  schema?: { type?: string };
+}
+
+function isOpenAPIParameter(param: unknown): param is OpenAPIParameter {
+  return typeof param === "object" && param !== null && "name" in param;
+}
+
+export function extractParameters(
+  parameters: unknown[] | undefined,
+): ParameterInfo[] {
+  if (!parameters) return [];
+
+  return parameters
+    .filter(isOpenAPIParameter)
+    .filter((p) => p.name && p.in !== "header") // Skip headers, they're rarely user-facing
+    .map((p) => ({
+      name: p.name!,
+      type: p.type || p.schema?.type || "unknown",
+      location: p.in || "unknown",
+      required: p.required ?? false,
+      description: p.description,
+    }));
+}
+
+export function formatParametersSummary(
+  parameters: unknown[] | undefined,
+): string {
+  const params = extractParameters(parameters);
+  if (params.length === 0) return "";
+
+  return params
+    .map((p) => {
+      const optional = p.required ? "" : "?";
+      return `${p.name}${optional}: ${p.type}`;
+    })
+    .join(", ");
+}
+
 interface ResponseSchema {
   statusCode: string;
   description?: string;

@@ -1,4 +1,9 @@
-import { parseOpenApiSpec, type OpenAPIOperation } from "./openapi.js";
+import {
+  parseOpenApiSpec,
+  formatParametersSummary,
+  type OpenAPIOperation,
+} from "./openapi.js";
+import chalk from "chalk";
 import {
   fetchGraphQLSchema,
   type GraphQLOperation,
@@ -45,11 +50,13 @@ Examples:
 
 function formatEndpointLabel(endpoint: OpenAPIOperation): string {
   const method = endpoint.method.padEnd(7);
-  return `${method} ${endpoint.path}`;
+  const params = formatParametersSummary(endpoint.parameters);
+  const paramHint = params ? chalk.dim(` (${params})`) : "";
+  return `${method} ${endpoint.path}${paramHint}`;
 }
 
 function formatEndpointHint(endpoint: OpenAPIOperation): string {
-  return endpoint.summary || endpoint.operationId || "";
+  return endpoint.summary || endpoint.description || endpoint.operationId || "";
 }
 
 function formatOperationLabel(operation: GraphQLOperation): string {
