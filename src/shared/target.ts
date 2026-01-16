@@ -118,9 +118,7 @@ export async function resolveTargetFromConfig(
   } else {
     entries = await discoverServers();
     if (entries.length === 0) {
-      console.warn(
-        "Warning: No MCP config files found in standard locations.",
-      );
+      console.warn("Warning: No MCP config files found in standard locations.");
     }
   }
 

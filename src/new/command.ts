@@ -39,12 +39,16 @@ Create a new MCP server project.
 Options:
   --name <name>            Server name (required if using CLI args)
   --path <path>            Directory path (defaults to ./<name>)
-  --type <type>            Server type: local or remote (default: remote)
-  --http-framework <type>  HTTP framework: native or hono (default: native)
+  --type <type>            Server type: local (stdio) or remote (HTTP) (default: remote)
+  --http-framework <type>  HTTP framework: native or hono (default: native, remote only)
   --package-manager <pm>   Package manager: npm, pnpm, yarn, deno, or bun
   --no-git                 Skip git initialization
   --deploy <option>        Deployment option: docker (remote server only)
   --help                   Show this help message
+
+Server Types:
+  remote                   HTTP-based server requiring deployment, accessible via URL
+  local                    stdio-only server for local integration, simpler but needs manual setup
 
 Examples:
   mcp-farmer new
@@ -299,14 +303,15 @@ export async function newCommand(args: string[]) {
         choices: [
           {
             value: "remote" as const,
-            name: "Remote",
+            name: "Remote (HTTP-based)",
             description:
-              "HTTP transport for hosted servers and stdio transport for local development",
+              "Requires deployment but accessible via URL - easier for non-technical users to connect",
           },
           {
             value: "local" as const,
-            name: "Local",
-            description: "stdio transport only for local integrations",
+            name: "Local (stdio-only)",
+            description:
+              "Simpler to build but requires installation and technical skills to set up on each machine",
           },
         ],
       });
@@ -321,8 +326,16 @@ export async function newCommand(args: string[]) {
       httpFramework = await select({
         message: "HTTP framework:",
         choices: [
-          { value: "native", name: "Native Node.js HTTP" },
-          { value: "hono", name: "Hono" },
+          {
+            value: "native",
+            name: "Native Node.js HTTP",
+            description: "Zero dependencies, built-in Node.js HTTP server",
+          },
+          {
+            value: "hono",
+            name: "Hono",
+            description: "Lightweight web framework with better ergonomics",
+          },
         ],
       });
     }
