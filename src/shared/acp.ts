@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { log } from "./log.js";
 import {
   select,
+  search,
   spinner,
   cancel,
   handleCancel,
@@ -115,18 +116,33 @@ async function promptModelSelection(
     "default";
 
   try {
-    const modelChoice = await select({
+    const choices = [
+      {
+        value: defaultId,
+        name: `Use default (${defaultName})`,
+        description: "recommended",
+      },
+      ...availableModels
+        .filter((m) => m.modelId !== defaultId)
+        .map((m) => ({
+          value: m.modelId,
+          name: m.name,
+          description: m.modelId,
+        })),
+    ];
+
+    const modelChoice = await search({
       message: "Select a model:",
-      choices: [
-        {
-          value: defaultId,
-          name: `Use default (${defaultName})`,
-          description: "recommended",
-        },
-        ...availableModels
-          .filter((m) => m.modelId !== defaultId)
-          .map((m) => ({ value: m.modelId, name: m.name })),
-      ],
+      source: async (input) => {
+        if (!input) return choices;
+
+        const searchTerm = input.toLowerCase();
+        return choices.filter(
+          (choice) =>
+            choice.name.toLowerCase().includes(searchTerm) ||
+            choice.description?.toLowerCase().includes(searchTerm),
+        );
+      },
     });
 
     if (modelChoice !== currentModelId) {
