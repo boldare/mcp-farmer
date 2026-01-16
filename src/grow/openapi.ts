@@ -37,7 +37,7 @@ export function extractParameters(
     .filter(isOpenAPIParameter)
     .filter((p) => p.name && p.in !== "header") // Skip headers, they're rarely user-facing
     .map((p) => ({
-      name: p.name!,
+      name: p.name ?? "Parameter",
       type: p.type || p.schema?.type || "unknown",
       location: p.in || "unknown",
       required: p.required ?? false,
