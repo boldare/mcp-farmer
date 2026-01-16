@@ -41,14 +41,22 @@ export function parseTarget(args: string[]): {
     };
   }
 
-  const firstNonOption = args.find((arg) => !arg.startsWith("-"));
+  const firstNonOptionIndex = args.findIndex((arg) => !arg.startsWith("-"));
+  if (firstNonOptionIndex === -1) {
+    return { target: null, remainingArgs: args };
+  }
+
+  const firstNonOption = args[firstNonOptionIndex];
   if (!firstNonOption) {
     return { target: null, remainingArgs: args };
   }
 
   try {
     const url = new URL(firstNonOption);
-    const remainingArgs = args.filter((arg) => arg !== firstNonOption);
+    const remainingArgs = [
+      ...args.slice(0, firstNonOptionIndex),
+      ...args.slice(firstNonOptionIndex + 1),
+    ];
     return { target: { mode: "http", url }, remainingArgs };
   } catch {
     return { target: null, remainingArgs: args };
@@ -92,15 +100,28 @@ export async function resolveTargetFromConfig(
   if (configPath) {
     try {
       entries = await parseConfigFile(configPath);
+      if (entries.length === 0) {
+        console.warn(
+          `Warning: Config file exists but contains no valid MCP servers: ${configPath}`,
+        );
+      }
     } catch (error) {
       console.error(`Error reading config file: ${configPath}`);
       if (error instanceof Error) {
         console.error(error.message);
       }
+      console.warn(
+        "The config file may be corrupted or contain invalid JSON. Please check the file.",
+      );
       process.exit(2);
     }
   } else {
     entries = await discoverServers();
+    if (entries.length === 0) {
+      console.warn(
+        "Warning: No MCP config files found in standard locations.",
+      );
+    }
   }
 
   if (entries.length === 0) {

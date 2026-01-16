@@ -142,31 +142,41 @@ Examples:
 export async function vetCommand(args: string[]) {
   const { target, remainingArgs } = parseTarget(args);
 
-  const { values } = parseArgs({
-    args: remainingArgs,
-    options: {
-      config: {
-        short: "c",
-        type: "string",
+  let values;
+  try {
+    const parsed = parseArgs({
+      args: remainingArgs,
+      options: {
+        config: {
+          short: "c",
+          type: "string",
+        },
+        output: {
+          short: "o",
+          type: "string",
+        },
+        oauth: {
+          type: "boolean",
+        },
+        "oauth-port": {
+          type: "string",
+        },
+        help: {
+          short: "h",
+          type: "boolean",
+        },
       },
-      output: {
-        short: "o",
-        type: "string",
-      },
-      oauth: {
-        type: "boolean",
-      },
-      "oauth-port": {
-        type: "string",
-      },
-      help: {
-        short: "h",
-        type: "boolean",
-      },
-    },
-    strict: true,
-    allowPositionals: true,
-  });
+      strict: true,
+      allowPositionals: true,
+    });
+    values = parsed.values;
+  } catch (error) {
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    printHelp();
+    process.exit(2);
+  }
 
   if (values.help) {
     printHelp();

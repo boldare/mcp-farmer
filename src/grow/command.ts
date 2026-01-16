@@ -501,7 +501,8 @@ export async function growCommand(args: string[]) {
 
   if (args.length === 0) {
     promptLog.error("Please provide a feature you would like to grow");
-    process.exit(1);
+    printHelp();
+    process.exit(2);
   }
 
   const feature = args[0];
@@ -514,6 +515,7 @@ export async function growCommand(args: string[]) {
     promptLog.error(
       `Invalid feature: ${feature}. Valid features are: openapi, graphql`,
     );
-    process.exit(1);
+    printHelp();
+    process.exit(2);
   }
 }

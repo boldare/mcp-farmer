@@ -252,21 +252,31 @@ export async function probeCommand(args: string[]) {
 
   const { target, remainingArgs } = parseTarget(args);
 
-  const { values } = parseArgs({
-    args: remainingArgs,
-    options: {
-      config: {
-        short: "c",
-        type: "string",
+  let values;
+  try {
+    const parsed = parseArgs({
+      args: remainingArgs,
+      options: {
+        config: {
+          short: "c",
+          type: "string",
+        },
+        help: {
+          short: "h",
+          type: "boolean",
+        },
       },
-      help: {
-        short: "h",
-        type: "boolean",
-      },
-    },
-    strict: true,
-    allowPositionals: true,
-  });
+      strict: true,
+      allowPositionals: true,
+    });
+    values = parsed.values;
+  } catch (error) {
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    printHelp();
+    process.exit(2);
+  }
 
   if (values.help) {
     printHelp();
@@ -360,8 +370,12 @@ export async function probeCommand(args: string[]) {
     await runProbe(resolvedTarget, selectedTools, serverName);
   } catch (error) {
     s.stop("Connection failed");
+    if (error instanceof ConnectionError) {
+      console.error(`Error: ${error.message}`);
+      process.exit(2);
+    }
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Error: ${message}`);
-    process.exit(error instanceof ConnectionError ? 2 : 1);
+    process.exit(1);
   }
 }

@@ -317,17 +317,27 @@ async function runTry(client: Client, transport: Transport): Promise<void> {
 export async function tryCommand(args: string[]) {
   const { target, remainingArgs } = parseTarget(args);
 
-  const { values } = parseArgs({
-    args: remainingArgs,
-    options: {
-      help: {
-        short: "h",
-        type: "boolean",
+  let values;
+  try {
+    const parsed = parseArgs({
+      args: remainingArgs,
+      options: {
+        help: {
+          short: "h",
+          type: "boolean",
+        },
       },
-    },
-    strict: true,
-    allowPositionals: true,
-  });
+      strict: true,
+      allowPositionals: true,
+    });
+    values = parsed.values;
+  } catch (error) {
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    printHelp();
+    process.exit(2);
+  }
 
   if (values.help) {
     printHelp();
@@ -368,8 +378,12 @@ export async function tryCommand(args: string[]) {
     log.message(`What's next?\n` + `  mcp-farmer vet   Get a full report`);
   } catch (error) {
     s.stop("Connection failed");
+    if (error instanceof ConnectionError) {
+      console.error(`Error: ${error.message}`);
+      process.exit(2);
+    }
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Error: ${message}`);
-    process.exit(error instanceof ConnectionError ? 2 : 1);
+    process.exit(1);
   }
 }

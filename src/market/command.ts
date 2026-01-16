@@ -117,8 +117,14 @@ export async function saveServerConfig(
   try {
     const content = await readFile(configPath, "utf-8");
     existingConfig = JSON.parse(content);
-  } catch {
-    existingConfig = {};
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("ENOENT")) {
+      existingConfig = {};
+    } else {
+      throw new Error(
+        `Failed to parse existing config file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   const existingServers = existingConfig[configKey] ?? {};
@@ -239,7 +245,8 @@ export async function marketCommand(args: string[]) {
     );
   } catch (error) {
     s.stop("Failed to save configuration");
-    console.error(error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Error: ${message}\n`);
 
     const fullConfig = { [configKey]: { [serverName]: serverConfig } };
     const manualInstallMessage = `Add this to your MCP configuration file:\n${client.path}\n\n${JSON.stringify(fullConfig, null, 2)}`;

@@ -159,6 +159,7 @@ export async function connectAgent<TClient extends acp.Client>(
   const agentProcess = spawnAgentProcess(options.agent);
 
   if (!agentProcess.stdin || !agentProcess.stdout) {
+    agentProcess.kill();
     s.stop("Failed to connect");
     throw new Error("Failed to spawn agent process");
   }
@@ -172,43 +173,49 @@ export async function connectAgent<TClient extends acp.Client>(
   const stream = acp.ndJsonStream(input, output);
   const connection = new acp.ClientSideConnection(() => client, stream);
 
-  const initResult = await connection.initialize({
-    protocolVersion: acp.PROTOCOL_VERSION,
-    clientCapabilities: options.clientCapabilities ?? {},
-  });
+  try {
+    const initResult = await connection.initialize({
+      protocolVersion: acp.PROTOCOL_VERSION,
+      clientCapabilities: options.clientCapabilities ?? {},
+    });
 
-  log(
-    "agent_connected",
-    `${initResult.agentInfo.name} ${initResult.agentInfo.version}`,
-  );
+    log(
+      "agent_connected",
+      `${initResult.agentInfo.name} ${initResult.agentInfo.version}`,
+    );
 
-  const sessionResult = await connection.newSession({
-    cwd: process.cwd(),
-    mcpServers: options.mcpServers ?? [],
-  });
+    const sessionResult = await connection.newSession({
+      cwd: process.cwd(),
+      mcpServers: options.mcpServers ?? [],
+    });
 
-  s.stop(`Connected to ${label}`);
+    s.stop(`Connected to ${label}`);
 
-  let selectedModel: string | undefined;
-  if (options.enableModelSelection) {
-    selectedModel = await promptModelSelection(connection, sessionResult);
+    let selectedModel: string | undefined;
+    if (options.enableModelSelection) {
+      selectedModel = await promptModelSelection(connection, sessionResult);
+    }
+
+    log("session_created", selectedModel || "default");
+
+    if (options.onClientReady) {
+      options.onClientReady(client);
+    }
+
+    return {
+      session: {
+        connection,
+        process: agentProcess,
+        sessionId: sessionResult.sessionId,
+        selectedModel,
+      },
+      client,
+    };
+  } catch (error) {
+    agentProcess.kill();
+    s.stop("Failed to connect");
+    throw error;
   }
-
-  log("session_created", selectedModel || "default");
-
-  if (options.onClientReady) {
-    options.onClientReady(client);
-  }
-
-  return {
-    session: {
-      connection,
-      process: agentProcess,
-      sessionId: sessionResult.sessionId,
-      selectedModel,
-    },
-    client,
-  };
 }
 
 // Shared permission handler that can be mixed into any client

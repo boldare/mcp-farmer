@@ -69,8 +69,11 @@ function getConnectionErrorMessage(error: unknown, url: URL): string {
   ) {
     return `Connection refused: ${url.origin} - is the server running?`;
   }
-  if (message.includes("etimedout")) {
-    return `Connection timed out: ${url.origin}`;
+  if (message.includes("etimedout") || message.includes("timed out")) {
+    return (
+      `Connection timed out: ${url.origin}\n` +
+      `Check that the server is reachable and the URL is correct.`
+    );
   }
   if (message.includes("typo in the url")) {
     return `Could not connect to ${url.origin} - check if the URL is correct`;
@@ -86,15 +89,27 @@ function isAuthError(error: unknown): boolean {
   return false;
 }
 
+const NETWORK_TIMEOUT_MS = 30000; // 30 seconds
+
 async function fetchAuthDetails(
   url: URL,
 ): Promise<{ authHeader?: string; errorDescription?: string }> {
   try {
-    const response = await fetch(url, { method: "GET" });
-    const authHeader = response.headers.get("WWW-Authenticate") ?? undefined;
-    const body = await response.text();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
 
-    return { authHeader, errorDescription: body || undefined };
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        signal: controller.signal,
+      });
+      const authHeader = response.headers.get("WWW-Authenticate") ?? undefined;
+      const body = await response.text();
+
+      return { authHeader, errorDescription: body || undefined };
+    } finally {
+      clearTimeout(timeoutId);
+    }
   } catch {
     return {};
   }
@@ -113,7 +128,15 @@ async function tryConnect(
   const transport = new TransportClass(url, { authProvider });
 
   try {
-    await client.connect(transport);
+    const connectPromise = client.connect(transport);
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(
+        () => reject(new Error("Connection timed out after 30 seconds")),
+        NETWORK_TIMEOUT_MS,
+      );
+    });
+
+    await Promise.race([connectPromise, timeoutPromise]);
     return transport;
   } catch (error) {
     if (!(error instanceof UnauthorizedError) || !authProvider) {
@@ -191,6 +214,29 @@ export async function connectStdio(
 ): Promise<{ client: Client; transport: Transport }> {
   const client = new Client({ name: "mcp-farmer", version: "1.0.0" });
   const transport = new StdioClientTransport({ command, args });
-  await client.connect(transport);
-  return { client, transport };
+
+  try {
+    await client.connect(transport);
+    return { client, transport };
+  } catch (error) {
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+
+      if (message.includes("enoent") || message.includes("command not found")) {
+        throw new ConnectionError(
+          `Command not found: ${command}\n` +
+            `Make sure the command is installed and available in your PATH.`,
+        );
+      }
+
+      if (message.includes("eacces") || message.includes("permission denied")) {
+        throw new ConnectionError(
+          `Permission denied: ${command}\n` +
+            `Make sure the command is executable.`,
+        );
+      }
+    }
+
+    throw error;
+  }
 }

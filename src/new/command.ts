@@ -158,21 +158,31 @@ const validDeployOptions = ["docker"] as const;
 type ServerType = (typeof validServerTypes)[number];
 
 export async function newCommand(args: string[]) {
-  const { values } = parseArgs({
-    args,
-    options: {
-      name: { type: "string" },
-      path: { type: "string" },
-      type: { type: "string" },
-      "http-framework": { type: "string" },
-      "package-manager": { type: "string" },
-      "no-git": { type: "boolean", default: false },
-      deploy: { type: "string" },
-      help: { short: "h", type: "boolean" },
-    },
-    strict: true,
-    allowPositionals: false,
-  });
+  let values;
+  try {
+    const parsed = parseArgs({
+      args,
+      options: {
+        name: { type: "string" },
+        path: { type: "string" },
+        type: { type: "string" },
+        "http-framework": { type: "string" },
+        "package-manager": { type: "string" },
+        "no-git": { type: "boolean", default: false },
+        deploy: { type: "string" },
+        help: { short: "h", type: "boolean" },
+      },
+      strict: true,
+      allowPositionals: false,
+    });
+    values = parsed.values;
+  } catch (error) {
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    printHelp();
+    process.exit(2);
+  }
 
   if (values.help) {
     printHelp();

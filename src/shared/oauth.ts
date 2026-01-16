@@ -91,7 +91,13 @@ export class CliOAuthProvider implements OAuthClientProvider {
           ? "start"
           : "xdg-open";
 
-    exec(`${openCommand} "${authorizationUrl.toString()}"`);
+    exec(`${openCommand} "${authorizationUrl.toString()}"`, (error) => {
+      if (error) {
+        console.warn(
+          "Warning: Could not automatically open browser. Please open the URL manually in your browser.",
+        );
+      }
+    });
   }
 
   waitForAuthorizationCode(): Promise<string> {
