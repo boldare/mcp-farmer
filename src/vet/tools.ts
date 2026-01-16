@@ -25,6 +25,24 @@ export function checkToolDescriptions(tool: Tool): Finding[] {
   return [];
 }
 
+const MIN_DESCRIPTION_LENGTH = 50;
+
+export function checkDescriptionQuality(tool: Tool): Finding[] {
+  if (tool.description && tool.description.length < MIN_DESCRIPTION_LENGTH) {
+    return [
+      {
+        ruleId: "short-tool-description",
+        severity: "info",
+        message:
+          "Tool description is very short. Consider adding usage examples, parameter details, and return value documentation.",
+        toolName: tool.name,
+      },
+    ];
+  }
+
+  return [];
+}
+
 export function checkInputDescriptions(tool: Tool): Finding[] {
   const schema = tool.inputSchema as Schema | undefined;
   const properties = schema?.properties ?? {};
@@ -383,6 +401,7 @@ export function checkSimilarDescriptions(tools: Tool[]): Finding[] {
 export function runCheckers(tools: Tool[]): Finding[] {
   const perToolCheckers = [
     checkToolDescriptions,
+    checkDescriptionQuality,
     checkInputDescriptions,
     checkInputCount,
     checkDangerousTools,

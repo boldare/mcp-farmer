@@ -4,6 +4,7 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import {
   checkInputDescriptions,
   checkToolDescriptions,
+  checkDescriptionQuality,
   checkInputCount,
   checkDuplicateToolNames,
   checkTotalToolCount,
@@ -48,6 +49,61 @@ describe("checkToolDescriptions", () => {
     });
 
     const findings = checkToolDescriptions(tool);
+
+    expect(findings).toEqual([]);
+  });
+});
+
+describe("checkDescriptionQuality", () => {
+  test("returns info when tool description is too short", () => {
+    const tool = createTool({
+      name: "my-tool",
+      description: "Does something useful",
+    });
+
+    const findings = checkDescriptionQuality(tool);
+
+    expect(findings).toEqual([
+      {
+        ruleId: "short-tool-description",
+        severity: "info",
+        message:
+          "Tool description is very short. Consider adding usage examples, parameter details, and return value documentation.",
+        toolName: "my-tool",
+      },
+    ]);
+  });
+
+  test("returns no finding when tool description is 50+ characters", () => {
+    const tool = createTool({
+      name: "my-tool",
+      description:
+        "This is a comprehensive description that explains what the tool does in detail",
+    });
+
+    const findings = checkDescriptionQuality(tool);
+
+    expect(findings).toEqual([]);
+  });
+
+  test("returns no finding when tool description is exactly 50 characters", () => {
+    const tool = createTool({
+      name: "my-tool",
+      description: "This description is exactly 50 characters long ok!",
+    });
+
+    const findings = checkDescriptionQuality(tool);
+
+    expect(findings).toEqual([]);
+  });
+
+  test("returns no finding when tool has no description", () => {
+    const tool = createTool({
+      name: "my-tool",
+      description: undefined,
+    });
+
+    const findings = checkDescriptionQuality(tool);
 
     expect(findings).toEqual([]);
   });
@@ -608,7 +664,7 @@ describe("runCheckers", () => {
   test("aggregates findings from per-tool and server-level checkers", () => {
     const tool1 = createTool({
       name: "deleteUserEmail", // triggers: dangerous-tool, pii-handling
-      description: "Delete user email from the database", // similar to tool2
+      description: "Delete user email from the database", // similar to tool2, short-tool-description
       // no annotations -> triggers: missing-tool-annotations
       // no outputSchema -> triggers: missing-output-schema
       inputSchema: {
@@ -621,7 +677,7 @@ describe("runCheckers", () => {
 
     const tool2 = createTool({
       name: "deleteUserEmail", // triggers: duplicate-tool-name
-      description: "Delete user email address from database", // triggers: similar-descriptions
+      description: "Delete user email address from database", // triggers: similar-descriptions, short-tool-description
     });
 
     const findings = runCheckers([tool1, tool2]);
@@ -637,5 +693,6 @@ describe("runCheckers", () => {
     expect(ruleIds).toContain("missing-input-description");
     expect(ruleIds).toContain("missing-output-schema");
     expect(ruleIds).toContain("missing-tool-annotations");
+    expect(ruleIds).toContain("short-tool-description");
   });
 });
