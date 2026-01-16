@@ -12,9 +12,45 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 
 ## Code Style
 
-- Write simple but robust and idiomatic TypeScript code
-- Prefer early returns, simple control flow and imperative approach over complex abstractions and accidental complexity
-- Only use comments if they add additional context not just duplicate the code
+- Write simple, robust, idiomatic TypeScript.
+- Prefer explicit, boring code over clever code:
+  - prefer early returns and shallow nesting
+  - prefer straightforward loops/conditionals over deeply chained functional pipelines
+  - avoid “action at a distance” (hidden mutation, surprising control flow)
+- Keep functions small and locally understandable:
+  - keep control flow centralized (push branching up, keep helpers mostly branch-free)
+  - keep state mutation centralized; prefer helpers that compute values rather than mutate shared state
+- Be explicit at boundaries:
+  - validate and normalize all external inputs (CLI args, env, config files, network responses)
+  - prefer `unknown` + narrowing over `any`
+  - use exhaustiveness checks for unions (`switch` + `assertNever`) when appropriate
+- Fail fast with actionable errors:
+  - throw/return errors with enough context for the user to fix the issue
+  - don’t swallow errors; handle them at boundaries and map to CLI exit codes
+  - always clean up resources with `try/finally`
+- Put limits on work:
+  - time out network operations
+  - bound retries, concurrency, and loops where practical
+- Comments are for “why”, not “what”:
+  - add a comment when the intent, tradeoff, or invariant is non-obvious
+  - prefer changing code to be self-explanatory over adding commentary
+- Extract a helper only if it meaningfully improves maintainability:
+  - reuse across files, a type guard, or a clear readability win
+  - avoid premature abstraction; refactor after behavior is correct
+- Be conservative with dependencies:
+  - add a dependency only when it clearly reduces risk/complexity compared to in-repo code
+
+## Tests
+
+- Prefer test-first (TDD, Kent Beck): write a failing test that describes the next bit of behavior, implement the smallest change to pass, then refactor (Red → Green → Refactor).
+- Prefer small steps: one behavior per test, small diffs, run tests frequently.
+- Prefer table style tests for similar inputs.
+- Keep tests fast, deterministic, and isolated:
+  - avoid real network/time/randomness unless explicitly under test (use fakes and fixed clocks)
+  - no order dependence; clean up global/shared state after each test
+- Test behavior, not implementation details (avoid brittle coupling to internals).
+- Use smart coverage: prioritize critical paths, edge cases, and regressions; don’t add redundant tests just to raise coverage.
+- Keep tests readable: clear names, Arrange/Act/Assert (or Given/When/Then), minimal shared setup (abstract only when it improves clarity).
 
 ## CLI Conventions
 
