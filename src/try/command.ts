@@ -373,7 +373,7 @@ export async function tryCommand(args: string[]) {
 
     await runTry(client, transport);
 
-    outro("Done");
+    outro("MCP Tool Runner completed");
 
     log.message(`What's next?\n` + `  mcp-farmer vet   Get a full report`);
 
