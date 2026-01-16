@@ -7,7 +7,7 @@ import { newCommand } from "./src/new/command.js";
 import { marketCommand } from "./src/market/command.js";
 import { tryCommand } from "./src/try/command.js";
 import { growCommand } from "./src/grow/command.js";
-import { evalCommand } from "./src/eval/command.js";
+import { probeCommand } from "./src/probe/command.js";
 
 function getVersion(): string {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -27,7 +27,7 @@ Commands:
   market           Browse and install popular MCP servers
   try <url>        Interactively call a tool on an MCP server
   grow <feature>   Extend MCP server capabilities (eg. openapi)
-  eval <url>       Evaluate MCP tools using an AI coding agent
+  probe <url>      Probe MCP tools by calling them with AI-generated inputs
 
 Options:
   --help       Show this help message
@@ -68,8 +68,8 @@ async function main() {
     case "grow":
       await growCommand(subcommandArgs);
       break;
-    case "eval":
-      await evalCommand(subcommandArgs);
+    case "probe":
+      await probeCommand(subcommandArgs);
       break;
     default:
       console.error(`Unknown command: ${command}\n`);

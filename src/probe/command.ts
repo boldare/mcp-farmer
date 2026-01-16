@@ -9,7 +9,7 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { connect, connectStdio, ConnectionError } from "../shared/mcp.js";
 import { log, initLog } from "../shared/log.js";
 import { pluralize } from "../shared/text.js";
-import { EvalClient } from "./acp.js";
+import { ProbeClient } from "./acp.js";
 import {
   selectCodingAgent,
   connectAgent,
@@ -31,10 +31,10 @@ import {
 } from "../shared/prompts.js";
 
 function printHelp(): void {
-  console.log(`Usage: mcp-farmer eval <url> [options]
-       mcp-farmer eval [options] -- <command> [args...]
+  console.log(`Usage: mcp-farmer probe <url> [options]
+       mcp-farmer probe [options] -- <command> [args...]
 
-Evaluate MCP server tools using an AI coding agent.
+Probe MCP server tools by calling them with AI-generated test inputs.
 
 Arguments:
   url                  The URL of the MCP server to connect to (HTTP mode)
@@ -46,15 +46,15 @@ Options:
 
 Examples:
   Auto-detect from config:
-    mcp-farmer eval
-    mcp-farmer eval --config .cursor/mcp.json
+    mcp-farmer probe
+    mcp-farmer probe --config .cursor/mcp.json
 
   HTTP mode:
-    mcp-farmer eval http://localhost:3000/mcp
+    mcp-farmer probe http://localhost:3000/mcp
 
   Stdio mode:
-    mcp-farmer eval -- node server.js
-    mcp-farmer eval -- npx -y @modelcontextprotocol/server-memory`);
+    mcp-farmer probe -- node server.js
+    mcp-farmer probe -- npx -y @modelcontextprotocol/server-memory`);
 }
 
 function buildMcpServerConfig(
@@ -81,7 +81,7 @@ function buildMcpServerConfig(
 function generateReportFilename(serverName: string): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const safeName = serverName.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase();
-  return `mcp-eval-${safeName}-${timestamp}.md`;
+  return `mcp-probe-${safeName}-${timestamp}.md`;
 }
 
 function buildPrompt(
@@ -99,7 +99,7 @@ function buildPrompt(
     2,
   );
 
-  return `You are evaluating MCP (Model Context Protocol) tools. Your task is to test the provided tools by generating diverse test inputs and calling each tool to verify it works correctly.
+  return `You are probing MCP (Model Context Protocol) tools. Your task is to test the provided tools by generating diverse test inputs and calling each tool to verify it works correctly.
 
 ## Instructions
 
@@ -114,15 +114,15 @@ function buildPrompt(
 
 ## Report Output
 
-Write the evaluation report to: ${reportPath}
+Write the probe report to: ${reportPath}
 
 Use this markdown structure:
 
-# MCP Tool Evaluation Report
+# MCP Tool Probe Report
 
 ## Summary
 - **Server:** ${serverName}
-- **Tools evaluated:** [count]
+- **Tools probed:** [count]
 - **Date:** [ISO date]
 - **Overall status:** [Pass/Fail/Partial]
 
@@ -150,7 +150,7 @@ Use this markdown structure:
 | tool_name | 3 | 3 | 0 |
 | ... | ... | ... | ... |
 
-## Tools to Evaluate
+## Tools to Probe
 
 You must only call the tools listed below. Do not call any other tools.
 
@@ -162,7 +162,7 @@ ${toolsJson}
 Begin by calling each tool with your generated test inputs, then write the markdown report to ${reportPath}.`;
 }
 
-async function runEval(
+async function runProbe(
   target: CommandTarget,
   tools: Tool[],
   serverName: string,
@@ -184,12 +184,12 @@ async function runEval(
   const mcpServerConfig = buildMcpServerConfig(target, serverName);
 
   let session: AgentSession;
-  let client: EvalClient;
+  let client: ProbeClient;
 
   try {
     const result = await connectAgent({
       agent: agentChoice,
-      clientFactory: () => new EvalClient(),
+      clientFactory: () => new ProbeClient(),
       mcpServers: [mcpServerConfig],
       enableModelSelection: true,
     });
@@ -206,7 +206,7 @@ async function runEval(
   try {
     const toolWord = pluralize("tool", tools.length);
     const workSpinner = spinner();
-    workSpinner.start(`Evaluating ${tools.length} ${toolWord}...`);
+    workSpinner.start(`Probing ${tools.length} ${toolWord}...`);
 
     client.setSpinner(workSpinner);
 
@@ -223,18 +223,18 @@ async function runEval(
     });
 
     if (promptResult.stopReason === "end_turn") {
-      client.stopSpinner(`Evaluated ${tools.length} ${toolWord}`);
+      client.stopSpinner(`Probed ${tools.length} ${toolWord}`);
       promptLog.info(`Report written to: ${reportPath}`);
-      outro("Evaluation complete.");
+      outro("Probe complete.");
       log("session_completed", "end_turn");
     } else if (promptResult.stopReason === "cancelled") {
       client.stopSpinner("Cancelled");
-      cancel("Evaluation was cancelled.");
+      cancel("Probe was cancelled.");
       log("session_completed", "cancelled");
     } else {
       client.stopSpinner("Complete");
       promptLog.info(`Report written to: ${reportPath}`);
-      outro("Evaluation complete.");
+      outro("Probe complete.");
       log("session_completed", promptResult.stopReason);
     }
   } catch (error) {
@@ -247,8 +247,8 @@ async function runEval(
   }
 }
 
-export async function evalCommand(args: string[]) {
-  initLog("eval");
+export async function probeCommand(args: string[]) {
+  initLog("probe");
 
   const { target, remainingArgs } = parseTarget(args);
 
@@ -278,7 +278,7 @@ export async function evalCommand(args: string[]) {
   if (!resolvedTarget) {
     resolvedTarget = await resolveTargetFromConfig(
       values.config as string,
-      "Select an MCP server to evaluate:",
+      "Select an MCP server to probe:",
     );
   }
 
@@ -294,7 +294,7 @@ export async function evalCommand(args: string[]) {
     process.exit(2);
   }
 
-  intro("MCP Tool Evaluation");
+  intro("MCP Tool Probe");
 
   const s = spinner();
   s.start("Connecting to server...");
@@ -341,7 +341,7 @@ export async function evalCommand(args: string[]) {
     let selectedTools: Tool[];
     try {
       selectedTools = await checkbox({
-        message: "Select tools to evaluate:",
+        message: "Select tools to probe:",
         choices: toolChoices,
       });
 
@@ -357,7 +357,7 @@ export async function evalCommand(args: string[]) {
 
     await transport.close();
 
-    await runEval(resolvedTarget, selectedTools, serverName);
+    await runProbe(resolvedTarget, selectedTools, serverName);
   } catch (error) {
     s.stop("Connection failed");
     const message = error instanceof Error ? error.message : String(error);

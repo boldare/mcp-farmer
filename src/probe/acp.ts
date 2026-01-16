@@ -5,7 +5,7 @@ import {
 } from "../shared/acp.js";
 import { type SpinnerInstance } from "../shared/prompts.js";
 
-interface EvalProgress {
+interface ProbeProgress {
   toolsCalled: number;
   toolsPassed: number;
   toolsFailed: number;
@@ -57,7 +57,7 @@ function getActionMessage(
   kind: acp.ToolKind | null | undefined,
   title: string | null | undefined,
   toolName: string | null,
-): { action: string; phase: EvalProgress["phase"]; clearToolName: boolean } {
+): { action: string; phase: ProbeProgress["phase"]; clearToolName: boolean } {
   const kindStr = kind?.toString() || "other";
   const titleLower = title?.toLowerCase() || "";
 
@@ -83,7 +83,7 @@ function getActionMessage(
   return { action: "Working", phase: "analyzing", clearToolName: false };
 }
 
-function formatProgressMessage(progress: EvalProgress): string {
+function formatProgressMessage(progress: ProbeProgress): string {
   const parts: string[] = [progress.currentAction];
 
   if (progress.toolsCalled > 0) {
@@ -102,14 +102,14 @@ function formatProgressMessage(progress: EvalProgress): string {
   return parts.join(" ");
 }
 
-export class EvalClient implements acp.Client {
+export class ProbeClient implements acp.Client {
   private spinner: SpinnerInstance | null = null;
-  private progress: EvalProgress = {
+  private progress: ProbeProgress = {
     toolsCalled: 0,
     toolsPassed: 0,
     toolsFailed: 0,
     currentToolName: null,
-    currentAction: "Preparing evaluation",
+    currentAction: "Preparing probe",
     phase: "analyzing",
   };
 

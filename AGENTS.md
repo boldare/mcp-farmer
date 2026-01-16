@@ -36,7 +36,7 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
   - `oauth.ts` - OAuth authentication provider for MCP servers requiring auth
   - `config.ts` - MCP client config file parsing: discovers and parses config files from Cursor, VS Code, Claude Desktop, Claude Code, OpenCode, and Gemini CLI. Also exports `fileExists`, `getClaudeDesktopPath`, `getClaudeDesktopHint` utilities
   - `target.ts` - CLI argument parsing for command targets: parses URLs and stdio commands (after `--`), server selection from config, and resolves targets from config files
-  - `acp.ts` - Shared ACP (Agent Client Protocol) utilities: agent spawning, connection management, permission handling, and session update handlers used by grow and eval commands
+  - `acp.ts` - Shared ACP (Agent Client Protocol) utilities: agent spawning, connection management, permission handling, and session update handlers used by grow and probe commands
   - `schema.ts` - Tool schema extraction and type formatting utilities
   - `text.ts` - Text utilities (pluralization)
   - `log.ts` - Debug logging to file
@@ -74,9 +74,9 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
   - `openapi.ts` - OpenAPI/Swagger parser: extracts endpoints, parameters, and response schemas
   - `graphql.ts` - GraphQL introspection: fetches schema and extracts queries/mutations with arguments and return types
   - `acp.ts` - ACP client implementation: handles file operations, permissions, and displays agent progress
-- `src/eval/` - Eval command: evaluate MCP tools using AI coding agents
-  - `command.ts` - Eval command logic: connects to MCP server, lists tools, spawns coding agent via ACP with MCP server config, prompts agent to test tools
-  - `acp.ts` - ACP client implementation for eval: tracks tool calls and displays progress
+- `src/probe/` - Probe command: probe MCP tools by calling them with AI-generated test inputs
+  - `command.ts` - Probe command logic: connects to MCP server, lists tools, spawns coding agent via ACP with MCP server config, prompts agent to test tools
+  - `acp.ts` - ACP client implementation for probe: tracks tool calls and displays progress
 - `tests/` - Test files
   - `integration/` - Integration tests that spawn the CLI
     - `helpers/spawn.ts` - Helper to spawn CLI process and capture stdout/stderr
@@ -135,14 +135,14 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
 7. Sends prompt with selected endpoints and generation rules
 8. Agent generates MCP tool code following project patterns
 
-## Eval Command Flow
+## Probe Command Flow
 
-1. CLI dispatches to `evalCommand()` with args
+1. CLI dispatches to `probeCommand()` with args
 2. Parses target via shared `parseTarget()`: URL, stdio command (after `--`), or resolves from config via `resolveTargetFromConfig()`
 3. If multiple servers found in config, prompts user to select one via `selectServerFromEntries()`
 4. Connects to MCP server via `connect()` (HTTP) or `connectStdio()` (stdio)
-5. Lists available tools and prompts user to multi-select tools to evaluate
+5. Lists available tools and prompts user to multi-select tools to probe
 6. User selects a coding agent (OpenCode, Claude Code, or Gemini CLI)
 7. Spawns agent process and connects via ACP, passing the MCP server as session config
 8. Sends prompt instructing agent to generate test inputs and call each tool
-9. Agent calls tools, captures results, and outputs a markdown evaluation report
+9. Agent calls tools, captures results, and outputs a markdown probe report
