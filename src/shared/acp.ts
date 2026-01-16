@@ -148,6 +148,10 @@ async function promptModelSelection(
 export async function connectAgent<TClient extends acp.Client>(
   options: RunAgentOptions<TClient>,
 ): Promise<{ session: AgentSession; client: TClient }> {
+  // Increase max listeners to avoid warnings when many permission prompts are shown
+  // Each @inquirer/prompts select call adds listeners to stdin
+  process.stdin.setMaxListeners(100);
+
   const s = spinner();
   const label = AGENT_LABELS[options.agent];
   s.start(`Connecting to ${label}...`);
