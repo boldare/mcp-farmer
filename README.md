@@ -19,7 +19,7 @@ While this tool is stable and ready to be used you can expect new features and i
 - **Robust HTTP connect**: tries Streamable HTTP first, falls back to SSE, with timeouts and actionable errors.
 - **Auto-detect from config**: discovers MCP servers from common client configs and lets you pick one interactively.
 - **OAuth support (HTTP)**: `vet` can run an OAuth browser flow via `--oauth` (configurable `--oauth-port`).
-- **Interactive exploration**: `try` can call **tools** and read **resources**.
+- **Interactive exploration**: `try` can call **tools**, read **resources**, and get **prompts**.
 - **AI-assisted workflows**: `grow` generates tools; `probe` calls tools with AI-generated inputs and writes a report.
 
 ## What is MCP?
@@ -43,7 +43,7 @@ Commands:
   vet [url]    Vet an MCP server (auto-detects from config if no URL)
   new          Create a new MCP server project
   market       Browse and install popular MCP servers
-  try <url>    Interactively call a tool on an MCP server
+  try <url>    Interactively call tools, read resources, or get prompts on an MCP server
   grow         Generate MCP tools from OpenAPI or GraphQL specs
   probe        Probe MCP tools by calling them with AI-generated inputs
 
@@ -101,14 +101,14 @@ mcp-farmer market
 
 Browse curated MCP servers and add them to your client config (Claude Code, Claude Desktop, Cursor, VS Code, etc.).
 
-### `try` — Call tools interactively
+### `try` — Explore MCP servers interactively
 
 ```bash
 mcp-farmer try http://localhost:3000/mcp              # HTTP
 mcp-farmer try -- npx -y @modelcontextprotocol/server-memory  # Stdio
 ```
 
-Interactively calls tools and (when supported) lets you read server resources.
+Interactively explore an MCP server: call **tools**, read **resources**, and get **prompts**. Provides a searchable list of all available items with type-ahead filtering.
 
 ### `grow` — Generate MCP tools from API specs
 
