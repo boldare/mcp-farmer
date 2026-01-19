@@ -9,6 +9,7 @@ import { connect, connectStdio, ConnectionError } from "../shared/mcp.js";
 import {
   generateDocHtml,
   type DocData,
+  type DocHeader,
   type InstallMethod,
 } from "./html.js";
 import {
@@ -33,6 +34,7 @@ All provided methods are included in the generated documentation's Setup section
 Options:
   --remote <url>       Add a remote (HTTP) installation method (can be used multiple times)
   --local <command>    Add a local (stdio) installation method (can be used multiple times)
+  --header <header>    Add a required header in "Name: PLACEHOLDER" format (can be used multiple times)
   --out <file>         Output file path (skips interactive prompt)
   --help               Show this help message
 
@@ -44,6 +46,10 @@ Examples:
   Local server:
     mcp-farmer doc --local "npx -y @modelcontextprotocol/server-memory"
     mcp-farmer doc --local "node server.js"
+
+  With required headers:
+    mcp-farmer doc --remote https://mcp.example.com/sse --header "CONTEXT7_API_KEY: YOUR_API_KEY"
+    mcp-farmer doc --remote https://mcp.example.com/sse --header "Authorization: YOUR_TOKEN" --header "X-API-Key: YOUR_KEY"
 
   Multiple installation methods:
     mcp-farmer doc --remote https://prod.example.com --local "npx -y @example/mcp-server"
@@ -107,6 +113,10 @@ export async function docCommand(args: string[]) {
           type: "string",
           multiple: true,
         },
+        header: {
+          type: "string",
+          multiple: true,
+        },
         help: {
           short: "h",
           type: "boolean",
@@ -130,6 +140,29 @@ export async function docCommand(args: string[]) {
   }
 
   intro("MCP Documentation Generator");
+
+  // Parse headers from flags
+  const parsedHeaders: { name: string; placeholder: string }[] = [];
+  for (const headerStr of values.header ?? []) {
+    const colonIndex = headerStr.indexOf(":");
+    if (colonIndex === -1) {
+      console.error(
+        `Error: Invalid header format "${headerStr}". Expected "Name: PLACEHOLDER"\n`,
+      );
+      printHelp();
+      process.exit(2);
+    }
+    const name = headerStr.slice(0, colonIndex).trim();
+    const placeholder = headerStr.slice(colonIndex + 1).trim();
+    if (!name || !placeholder) {
+      console.error(
+        `Error: Invalid header format "${headerStr}". Both name and placeholder are required.\n`,
+      );
+      printHelp();
+      process.exit(2);
+    }
+    parsedHeaders.push({ name, placeholder });
+  }
 
   // Collect install methods from flags
   const installMethods: InstallMethod[] = [];
@@ -197,6 +230,61 @@ export async function docCommand(args: string[]) {
       handleCancel(error);
     }
   }
+
+  // Track if we're in interactive mode (no flags provided)
+  const isInteractiveMode =
+    (values.remote ?? []).length === 0 && (values.local ?? []).length === 0;
+
+  // Collect headers interactively only if in interactive mode and none provided via flags
+  if (isInteractiveMode && parsedHeaders.length === 0) {
+    try {
+      const addHeaders = await select({
+        message: "Does this server require any authentication headers?",
+        choices: [
+          { name: "No", value: false },
+          { name: "Yes", value: true },
+        ],
+      });
+
+      if (addHeaders) {
+        while (true) {
+          const headerName = await input({
+            message: "Enter header name (or leave empty to finish):",
+            validate: () => true,
+          });
+
+          if (!headerName || headerName.trim() === "") {
+            break;
+          }
+
+          const headerPlaceholder = await input({
+            message: `Enter placeholder for ${headerName} (e.g., YOUR_API_KEY):`,
+            default: "YOUR_API_KEY",
+            validate: (val) => {
+              if (!val || val.trim() === "") {
+                return "Please enter a placeholder value";
+              }
+              return true;
+            },
+          });
+
+          parsedHeaders.push({
+            name: headerName.trim(),
+            placeholder: headerPlaceholder.trim(),
+          });
+          log.info(`Added header: ${headerName}: ${headerPlaceholder}`);
+        }
+      }
+    } catch (error) {
+      handleCancel(error);
+    }
+  }
+
+  // Convert parsed headers to DocHeader format
+  const headers: DocHeader[] = parsedHeaders.map((header) => ({
+    name: header.name,
+    placeholder: header.placeholder,
+  }));
 
   // Use the first install method to connect to the server
   const connectionTarget = installMethods[0];
@@ -288,6 +376,7 @@ export async function docCommand(args: string[]) {
   const html = generateDocHtml({
     ...docData,
     installMethods,
+    headers,
   });
   const absolutePath = path.resolve(outputPath);
 

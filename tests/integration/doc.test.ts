@@ -12,6 +12,7 @@ describe("doc command", () => {
       expect(stdout).toContain("--out <file>");
       expect(stdout).toContain("--remote <url>");
       expect(stdout).toContain("--local <command>");
+      expect(stdout).toContain("--header <header>");
     });
 
     test("shows help with -h flag", async () => {

@@ -16,6 +16,11 @@ export interface InstallMethod {
   value: string;
 }
 
+export interface DocHeader {
+  name: string;
+  placeholder: string;
+}
+
 export interface DocData {
   serverName?: string;
   serverVersion?: string;
@@ -24,6 +29,7 @@ export interface DocData {
   resources: Resource[];
   prompts: Prompt[];
   installMethods?: InstallMethod[];
+  headers?: DocHeader[];
 }
 
 function escapeHtml(str: string): string {
@@ -41,11 +47,14 @@ function slugify(str: string): string {
     .replace(/^-|-$/g, "");
 }
 
+// Icons from https://lucide.dev/
 const icons = {
   tool: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wrench-icon lucide-wrench"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></svg>`,
   resource: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-icon lucide-folder"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>`,
   prompt: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square-icon lucide-message-square"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></svg>`,
   setup: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`,
+  copy: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy-icon lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
+  check: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><path d="M20 6 9 17l-5-5"/></svg>`,
 };
 
 function renderAnnotationBadges(
@@ -99,7 +108,7 @@ function generateExample(tool: Tool): string {
   return JSON.stringify(example, null, 2);
 }
 
-function renderToolCard(tool: Tool): string {
+function renderToolCard(tool: Tool, isFirst = false): string {
   const { properties, required, propNames } = extractToolSchema(tool);
   const slug = slugify(tool.name);
   const displayName = tool.annotations?.title ?? tool.name;
@@ -183,36 +192,40 @@ function renderToolCard(tool: Tool): string {
       : "";
 
   return `
-    <article id="tool-${slug}" class="card tool-card">
-      <div class="card-header">
+    <details id="tool-${slug}" class="card tool-card"${isFirst ? " open" : ""}>
+      <summary class="card-header">
         <div class="card-title-row">
           <h3 class="card-title">${nameHtml}</h3>
         </div>
         ${renderAnnotationBadges(tool.annotations)}
+      </summary>
+      <div class="card-content">
+        <p class="card-description">${tool.description ? escapeHtml(tool.description) : '<em>No description provided</em>'}</p>
+        ${inputsHtml}
+        ${outputsHtml}
+        ${exampleHtml}
       </div>
-      <p class="card-description">${tool.description ? escapeHtml(tool.description) : '<em>No description provided</em>'}</p>
-      ${inputsHtml}
-      ${outputsHtml}
-      ${exampleHtml}
-    </article>`;
+    </details>`;
 }
 
-function renderResourceCard(resource: Resource): string {
+function renderResourceCard(resource: Resource, isFirst = false): string {
   const slug = slugify(resource.uri);
 
   return `
-    <article id="resource-${slug}" class="card resource-card">
-      <div class="card-header">
+    <details id="resource-${slug}" class="card resource-card"${isFirst ? " open" : ""}>
+      <summary class="card-header">
         <div class="card-title-row">
           <h3 class="card-title">${escapeHtml(resource.name)}</h3>
         </div>
+      </summary>
+      <div class="card-content">
+        <p class="card-uri"><code>${escapeHtml(resource.uri)}</code></p>
+        <p class="card-description">${resource.description ? escapeHtml(resource.description) : '<em>No description provided</em>'}</p>
       </div>
-      <p class="card-uri"><code>${escapeHtml(resource.uri)}</code></p>
-      <p class="card-description">${resource.description ? escapeHtml(resource.description) : '<em>No description provided</em>'}</p>
-    </article>`;
+    </details>`;
 }
 
-function renderPromptCard(prompt: Prompt): string {
+function renderPromptCard(prompt: Prompt, isFirst = false): string {
   const slug = slugify(prompt.name);
   const args = prompt.arguments ?? [];
 
@@ -239,15 +252,17 @@ function renderPromptCard(prompt: Prompt): string {
   }
 
   return `
-    <article id="prompt-${slug}" class="card prompt-card">
-      <div class="card-header">
+    <details id="prompt-${slug}" class="card prompt-card"${isFirst ? " open" : ""}>
+      <summary class="card-header">
         <div class="card-title-row">
           <h3 class="card-title">${escapeHtml(prompt.name)}</h3>
         </div>
+      </summary>
+      <div class="card-content">
+        <p class="card-description">${prompt.description ? escapeHtml(prompt.description) : '<em>No description provided</em>'}</p>
+        ${argsHtml}
       </div>
-      <p class="card-description">${prompt.description ? escapeHtml(prompt.description) : '<em>No description provided</em>'}</p>
-      ${argsHtml}
-    </article>`;
+    </details>`;
 }
 
 function renderSidebarItem(
@@ -263,46 +278,181 @@ function renderSidebarItem(
     </a>`;
 }
 
-function renderInstallMethod(method: InstallMethod): string {
-  if (method.type === "remote") {
-    return `
-      <div class="install-method">
-        <div class="install-header">
-          <span class="install-badge install-badge-remote">Remote (HTTP)</span>
-        </div>
-        <p class="install-desc">Connect to the MCP server via HTTP/SSE transport:</p>
-        <pre class="code-block"><code>${escapeHtml(method.value)}</code></pre>
-      </div>`;
-  }
-
+function renderCopyButton(textToCopy: string): string {
   return `
-    <div class="install-method">
-      <div class="install-header">
-        <span class="install-badge install-badge-local">Local (stdio)</span>
-      </div>
-      <p class="install-desc">Run the MCP server locally via stdio transport:</p>
-      <pre class="code-block"><code>${escapeHtml(method.value)}</code></pre>
-    </div>`;
+    <button class="copy-btn" data-copy="${escapeHtml(textToCopy)}" aria-label="Copy to clipboard" title="Copy to clipboard">
+      <span class="copy-icon">${icons.copy}</span>
+      <span class="check-icon">${icons.check}</span>
+    </button>`;
 }
 
-function renderSetupSection(installMethods: InstallMethod[]): string {
+function renderClientSection(
+  clientName: string,
+  description: string,
+  code: string,
+): string {
+  const slug = slugify(clientName);
+  return `
+        <details id="client-${slug}" class="client-accordion">
+          <summary class="client-header">
+            <h3 class="client-title">${escapeHtml(clientName)}</h3>
+          </summary>
+          <div class="client-content">
+            <p class="install-desc">${escapeHtml(description)}</p>
+            <div class="code-with-copy">
+              <pre class="code-block code-block-inline"><code>${escapeHtml(code)}</code></pre>
+              ${renderCopyButton(code)}
+            </div>
+          </div>
+        </details>`;
+}
+
+function renderRemoteSection(
+  url: string,
+  serverName: string,
+  headers: DocHeader[],
+): string {
+  const safeName = serverName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const headerFlags = headers
+    .map((h) => `--header "${h.name}: \${${h.placeholder}}"`)
+    .join(" ");
+  const claudeCmd = `claude mcp add --transport http ${safeName} ${url}${headerFlags ? ` ${headerFlags}` : ""}`;
+
+  const openCodeConfig = JSON.stringify(
+    {
+      mcp: {
+        [safeName]: {
+          type: "remote",
+          url: url,
+          enabled: true,
+          ...(headers.length > 0
+            ? {
+                headers: Object.fromEntries(
+                  headers.map((h) => [h.name, `\${${h.placeholder}}`]),
+                ),
+              }
+            : {}),
+        },
+      },
+    },
+    null,
+    2,
+  );
+
+  return `
+    <section id="setup-remote" class="section setup-section">
+      <div class="setup-breadcrumb">MCP &bull; SETUP</div>
+      <h2 class="setup-title">Remote setup</h2>
+      <p class="setup-description">
+        Connect to the MCP server via <code class="inline-code">HTTP/SSE</code> transport.
+        Use the remote URL directly or configure it in your preferred MCP client:
+      </p>
+      <div class="code-with-copy">
+        <pre class="code-block code-block-inline"><code>${escapeHtml(url)}</code></pre>
+        ${renderCopyButton(url)}
+      </div>
+      <p class="setup-clients-intro">Here's how to set it up in some common MCP clients:</p>
+      ${renderClientSection("Claude Code", "Add this server to Claude Code:", claudeCmd)}
+      ${renderClientSection("OpenCode", "Add this to your opencode.json:", openCodeConfig)}
+    </section>`;
+}
+
+function renderLocalSection(
+  command: string,
+  serverName: string,
+  headers: DocHeader[],
+): string {
+  const safeName = serverName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const envFlags = headers
+    .map((h) => `-e ${h.placeholder}`)
+    .join(" ");
+  const claudeCmd = `claude mcp add ${safeName}${envFlags ? ` ${envFlags}` : ""} -- ${command}`;
+  const commandParts = command.split(/\s+/).filter(Boolean);
+
+  const openCodeConfig = JSON.stringify(
+    {
+      mcp: {
+        [safeName]: {
+          type: "local",
+          command: commandParts,
+          enabled: true,
+          ...(headers.length > 0
+            ? {
+                env: Object.fromEntries(
+                  headers.map((h) => [h.placeholder, `<your ${h.name} value>`]),
+                ),
+              }
+            : {}),
+        },
+      },
+    },
+    null,
+    2,
+  );
+
+  return `
+    <section id="setup-local" class="section setup-section">
+      <div class="setup-breadcrumb">MCP &bull; SETUP</div>
+      <h2 class="setup-title">Local setup</h2>
+      <p class="setup-description">
+        Run the MCP server locally via <code class="inline-code">stdio</code> transport.
+        You can run the command directly or configure it in your preferred MCP client:
+      </p>
+      <div class="code-with-copy">
+        <pre class="code-block code-block-inline"><code>${escapeHtml(command)}</code></pre>
+        ${renderCopyButton(command)}
+      </div>
+      <p class="setup-clients-intro">Here's how to set it up in some common MCP clients:</p>
+      ${renderClientSection("Claude Code", "Add this server to Claude Code:", claudeCmd)}
+      ${renderClientSection("OpenCode", "Add this to your opencode.json:", openCodeConfig)}
+    </section>`;
+}
+
+function renderSetupSections(
+  installMethods: InstallMethod[],
+  serverName: string,
+  headers: DocHeader[],
+): string {
   if (installMethods.length === 0) {
     return "";
   }
 
-  const methodsHtml = installMethods.map(renderInstallMethod).join("");
+  return installMethods
+    .map((method) =>
+      method.type === "remote"
+        ? renderRemoteSection(method.value, serverName, headers)
+        : renderLocalSection(method.value, serverName, headers),
+    )
+    .join("");
+}
+
+function renderSetupSidebarItems(installMethods: InstallMethod[]): string {
+  if (installMethods.length === 0) {
+    return "";
+  }
+
+  const hasRemote = installMethods.some((m) => m.type === "remote");
+  const hasLocal = installMethods.some((m) => m.type === "local");
+
+  let items = "";
+  if (hasRemote) {
+    items += `
+        <a href="#setup-remote" class="sidebar-item">
+          <span class="sidebar-label">Remote setup</span>
+        </a>`;
+  }
+  if (hasLocal) {
+    items += `
+        <a href="#setup-local" class="sidebar-item">
+          <span class="sidebar-label">Local setup</span>
+        </a>`;
+  }
 
   return `
-    <section id="setup" class="section">
-      <div class="section-header">
-        <span class="section-icon">${icons.setup}</span>
-        <h2 class="section-name">Setup</h2>
-      </div>
-      <p class="setup-intro">Choose one of the following installation methods to connect to this MCP server:</p>
-      <div class="install-methods">
-        ${methodsHtml}
-      </div>
-    </section>`;
+      <div class="sidebar-section">
+        <div class="sidebar-heading"><span class="sidebar-heading-icon">${icons.setup}</span>Setup</div>
+        ${items}
+      </div>`;
 }
 
 const css = `
@@ -645,12 +795,11 @@ body {
   border-radius: 12px;
 }
 
-/* Card */
+/* Card (Accordion) */
 .card {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 24px;
   margin-bottom: 16px;
 }
 
@@ -660,7 +809,44 @@ body {
 }
 
 .card-header {
-  margin-bottom: 16px;
+  padding: 24px;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  padding-right: 48px;
+}
+
+.card-header::-webkit-details-marker {
+  display: none;
+}
+
+.card-header::after {
+  content: '';
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: translateY(-50%) rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.card[open] > .card-header::after {
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.card-header:hover {
+  background: var(--bg-secondary);
+}
+
+.card-content {
+  padding: 0 24px 24px;
 }
 
 .card-title-row {
@@ -689,9 +875,14 @@ body {
 
 .card-description {
   color: var(--text-secondary);
-  margin-bottom: 20px;
+  margin: 0 0 20px;
   line-height: 1.75;
   font-size: 15px;
+  white-space: pre-wrap;
+}
+
+.card-description:last-child {
+  margin-bottom: 0;
 }
 
 .card-uri {
@@ -810,6 +1001,7 @@ body {
   font-size: 14px;
   line-height: 1.7;
   margin: 0;
+  white-space: pre-wrap;
 }
 
 .no-desc {
@@ -858,52 +1050,180 @@ body {
 }
 
 /* Setup section */
-.setup-intro {
-  color: var(--text-secondary);
-  margin-bottom: 24px;
-  line-height: 1.75;
+.setup-section {
+  padding-bottom: 48px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 48px;
 }
 
-.install-methods {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.setup-section:last-of-type {
+  border-bottom: none;
 }
 
-.install-method {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-}
-
-.install-header {
+.setup-breadcrumb {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   margin-bottom: 12px;
 }
 
-.install-badge {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
+.setup-title {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 42px;
+  font-weight: 400;
+  color: var(--text);
+  margin: 0 0 24px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.setup-description {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.8;
+  margin-bottom: 20px;
+  max-width: 700px;
+}
+
+.inline-code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
   border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  color: var(--text);
 }
 
-.install-badge-remote {
-  background: var(--install-remote-bg);
-  color: var(--install-remote-color);
-}
-
-.install-badge-local {
-  background: var(--install-local-bg);
-  color: var(--install-local-color);
+.setup-clients-intro {
+  color: var(--text-secondary);
+  font-size: 15px;
+  margin-top: 32px;
+  margin-bottom: 8px;
 }
 
 .install-desc {
   color: var(--text-secondary);
   font-size: 14px;
   margin-bottom: 12px;
+}
+
+/* Client accordion */
+.client-accordion {
+  margin-top: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.client-accordion:first-of-type {
+  margin-top: 24px;
+}
+
+.client-header {
+  padding: 20px 24px;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding-right: 48px;
+}
+
+.client-header::-webkit-details-marker {
+  display: none;
+}
+
+.client-header::after {
+  content: '';
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: translateY(-50%) rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.client-accordion[open] > .client-header::after {
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.client-header:hover {
+  background: var(--bg-secondary);
+}
+
+.client-content {
+  padding: 0 24px 24px;
+}
+
+.client-title {
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.code-with-copy {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.code-block-inline {
+  flex: 1;
+  margin: 0;
+}
+
+.copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.copy-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text);
+  border-color: var(--primary);
+}
+
+.copy-btn:active {
+  transform: scale(0.95);
+}
+
+.copy-btn .copy-icon {
+  display: flex;
+}
+
+.copy-btn .check-icon {
+  display: none;
+  color: var(--success);
+}
+
+.copy-btn.copied .copy-icon {
+  display: none;
+}
+
+.copy-btn.copied .check-icon {
+  display: flex;
+}
+
+.copy-btn.copied {
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.1);
 }
 
 /* Footer */
@@ -944,6 +1264,7 @@ export function generateDocHtml(data: DocData): string {
     resources,
     prompts,
     installMethods = [],
+    headers = [],
   } = data;
 
   const title = serverName ?? "MCP Server";
@@ -967,13 +1288,18 @@ export function generateDocHtml(data: DocData): string {
       ? prompts.map((p) => renderSidebarItem("prompt", p.name)).join("")
       : "";
 
-  // Setup section
-  const setupContent = renderSetupSection(installMethods);
+  // Setup sections (Remote/Local)
+  const setupContent = renderSetupSections(installMethods, title, headers);
+  const setupSidebarItems = renderSetupSidebarItems(installMethods);
 
   // Main content
-  const toolsContent = tools.map((t) => renderToolCard(t)).join("");
-  const resourcesContent = resources.map((r) => renderResourceCard(r)).join("");
-  const promptsContent = prompts.map((p) => renderPromptCard(p)).join("");
+  const toolsContent = tools.map((t, i) => renderToolCard(t, i === 0)).join("");
+  const resourcesContent = resources
+    .map((r, i) => renderResourceCard(r, i === 0))
+    .join("");
+  const promptsContent = prompts
+    .map((p, i) => renderPromptCard(p, i === 0))
+    .join("");
 
   const js = `
 (function() {
@@ -1047,6 +1373,23 @@ export function generateDocHtml(data: DocData): string {
       }
     }
   });
+
+  // Copy button functionality
+  document.querySelectorAll('.copy-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const textToCopy = btn.getAttribute('data-copy');
+      if (!textToCopy) return;
+
+      navigator.clipboard.writeText(textToCopy).then(function() {
+        btn.classList.add('copied');
+        setTimeout(function() {
+          btn.classList.remove('copied');
+        }, 2000);
+      }).catch(function(err) {
+        console.error('Failed to copy:', err);
+      });
+    });
+  });
 })();
 `;
 
@@ -1079,17 +1422,7 @@ export function generateDocHtml(data: DocData): string {
       <input type="text" id="search-input" class="search-input" placeholder="Search..." autocomplete="off">
     </div>
     <nav aria-label="Documentation navigation">
-    ${
-      installMethods.length > 0
-        ? `
-      <div class="sidebar-section">
-        <a href="#setup" class="sidebar-item">
-          <span class="sidebar-heading-icon">${icons.setup}</span>
-          <span class="sidebar-label">Setup</span>
-        </a>
-      </div>`
-        : ""
-    }
+    ${setupSidebarItems}
     ${
       tools.length > 0
         ? `
