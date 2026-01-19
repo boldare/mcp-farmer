@@ -9,7 +9,9 @@ import { connect, connectStdio, ConnectionError } from "../shared/mcp.js";
 import {
   generateDocHtml,
   type DocData,
+  type DocEnvVar,
   type DocHeader,
+  type DocSection,
   type InstallMethod,
 } from "./html.js";
 import {
@@ -21,6 +23,92 @@ import {
   log,
   handleCancel,
 } from "../shared/prompts.js";
+
+interface KeyValue {
+  name: string;
+  value: string;
+}
+
+function parseColonSeparated(
+  str: string,
+  fieldName: string,
+  valueName: string,
+): KeyValue {
+  const colonIndex = str.indexOf(":");
+  if (colonIndex === -1) {
+    throw new Error(
+      `Invalid ${fieldName} format "${str}". Expected "Name: ${valueName.toUpperCase()}"`,
+    );
+  }
+  const name = str.slice(0, colonIndex).trim();
+  const value = str.slice(colonIndex + 1).trim();
+  if (!name || !value) {
+    throw new Error(
+      `Invalid ${fieldName} format "${str}". Both name and ${valueName} are required.`,
+    );
+  }
+  return { name, value };
+}
+
+function parseAllColonSeparated(
+  values: string[] | undefined,
+  fieldName: string,
+  valueName: string,
+): KeyValue[] {
+  const result: KeyValue[] = [];
+  for (const str of values ?? []) {
+    result.push(parseColonSeparated(str, fieldName, valueName));
+  }
+  return result;
+}
+
+async function collectKeyValuePairs(
+  promptMessage: string,
+  namePrompt: string,
+  valuePrompt: (name: string) => string,
+  logPrefix: string,
+): Promise<KeyValue[]> {
+  const pairs: KeyValue[] = [];
+
+  const shouldAdd = await select({
+    message: promptMessage,
+    choices: [
+      { name: "No", value: false },
+      { name: "Yes", value: true },
+    ],
+  });
+
+  if (!shouldAdd) {
+    return pairs;
+  }
+
+  while (true) {
+    const name = await input({
+      message: namePrompt,
+      validate: () => true,
+    });
+
+    if (!name || name.trim() === "") {
+      break;
+    }
+
+    const value = await input({
+      message: valuePrompt(name),
+      default: "YOUR_API_KEY",
+      validate: (val) => {
+        if (!val || val.trim() === "") {
+          return "Please enter a value";
+        }
+        return true;
+      },
+    });
+
+    pairs.push({ name: name.trim(), value: value.trim() });
+    log.info(`Added ${logPrefix}: ${name}: ${value}`);
+  }
+
+  return pairs;
+}
 
 function printHelp(): void {
   console.log(`Usage: mcp-farmer doc --remote <url> [options]
@@ -34,7 +122,9 @@ All provided methods are included in the generated documentation's Setup section
 Options:
   --remote <url>       Add a remote (HTTP) installation method (can be used multiple times)
   --local <command>    Add a local (stdio) installation method (can be used multiple times)
-  --header <header>    Add a required header in "Name: PLACEHOLDER" format (can be used multiple times)
+  --header <header>    Add a required header in "Name: PLACEHOLDER" format for remote servers (can be used multiple times)
+  --env <env>          Add a required environment variable in "NAME: PLACEHOLDER" format for local servers (can be used multiple times)
+  --section <section>  Add a custom section in "TITLE: content" format (can be used multiple times)
   --out <file>         Output file path (skips interactive prompt)
   --help               Show this help message
 
@@ -47,9 +137,17 @@ Examples:
     mcp-farmer doc --local "npx -y @modelcontextprotocol/server-memory"
     mcp-farmer doc --local "node server.js"
 
-  With required headers:
-    mcp-farmer doc --remote https://mcp.example.com/sse --header "CONTEXT7_API_KEY: YOUR_API_KEY"
+  With required headers (remote):
+    mcp-farmer doc --remote https://mcp.example.com/sse --header "Authorization: YOUR_TOKEN"
     mcp-farmer doc --remote https://mcp.example.com/sse --header "Authorization: YOUR_TOKEN" --header "X-API-Key: YOUR_KEY"
+
+  With required environment variables (local):
+    mcp-farmer doc --local "npx -y @example/mcp-server" --env "API_KEY: YOUR_API_KEY"
+    mcp-farmer doc --local "npx -y @example/mcp-server" --env "API_KEY: YOUR_API_KEY" --env "SECRET: YOUR_SECRET"
+
+  With custom sections:
+    mcp-farmer doc --remote https://mcp.example.com/sse --section "Introduction: Welcome to our MCP server."
+    mcp-farmer doc --remote https://mcp.example.com/sse --section "Introduction: About this server" --section "Features: Key features of the API"
 
   Multiple installation methods:
     mcp-farmer doc --remote https://prod.example.com --local "npx -y @example/mcp-server"
@@ -117,6 +215,14 @@ export async function docCommand(args: string[]) {
           type: "string",
           multiple: true,
         },
+        env: {
+          type: "string",
+          multiple: true,
+        },
+        section: {
+          type: "string",
+          multiple: true,
+        },
         help: {
           short: "h",
           type: "boolean",
@@ -141,27 +247,24 @@ export async function docCommand(args: string[]) {
 
   intro("MCP Documentation Generator");
 
-  // Parse headers from flags
-  const parsedHeaders: { name: string; placeholder: string }[] = [];
-  for (const headerStr of values.header ?? []) {
-    const colonIndex = headerStr.indexOf(":");
-    if (colonIndex === -1) {
-      console.error(
-        `Error: Invalid header format "${headerStr}". Expected "Name: PLACEHOLDER"\n`,
-      );
-      printHelp();
-      process.exit(2);
-    }
-    const name = headerStr.slice(0, colonIndex).trim();
-    const placeholder = headerStr.slice(colonIndex + 1).trim();
-    if (!name || !placeholder) {
-      console.error(
-        `Error: Invalid header format "${headerStr}". Both name and placeholder are required.\n`,
-      );
-      printHelp();
-      process.exit(2);
-    }
-    parsedHeaders.push({ name, placeholder });
+  // Parse headers, env vars, and sections from flags
+  let headers: DocHeader[];
+  let envVars: DocEnvVar[];
+  let sections: DocSection[];
+
+  try {
+    const parsedHeaders = parseAllColonSeparated(values.header, "header", "placeholder");
+    headers = parsedHeaders.map((h) => ({ name: h.name, placeholder: h.value }));
+
+    const parsedEnvVars = parseAllColonSeparated(values.env, "env", "placeholder");
+    envVars = parsedEnvVars.map((e) => ({ name: e.name, placeholder: e.value }));
+
+    const parsedSections = parseAllColonSeparated(values.section, "section", "content");
+    sections = parsedSections.map((s) => ({ title: s.name, content: s.value }));
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+    printHelp();
+    process.exit(2);
   }
 
   // Collect install methods from flags
@@ -235,56 +338,52 @@ export async function docCommand(args: string[]) {
   const isInteractiveMode =
     (values.remote ?? []).length === 0 && (values.local ?? []).length === 0;
 
-  // Collect headers interactively only if in interactive mode and none provided via flags
-  if (isInteractiveMode && parsedHeaders.length === 0) {
+  // Collect headers interactively only if in interactive mode, has remote methods, and none provided via flags
+  const hasRemoteMethods = installMethods.some((m) => m.type === "remote");
+  if (isInteractiveMode && hasRemoteMethods && headers.length === 0) {
     try {
-      const addHeaders = await select({
-        message: "Does this server require any authentication headers?",
-        choices: [
-          { name: "No", value: false },
-          { name: "Yes", value: true },
-        ],
-      });
-
-      if (addHeaders) {
-        while (true) {
-          const headerName = await input({
-            message: "Enter header name (or leave empty to finish):",
-            validate: () => true,
-          });
-
-          if (!headerName || headerName.trim() === "") {
-            break;
-          }
-
-          const headerPlaceholder = await input({
-            message: `Enter placeholder for ${headerName} (e.g., YOUR_API_KEY):`,
-            default: "YOUR_API_KEY",
-            validate: (val) => {
-              if (!val || val.trim() === "") {
-                return "Please enter a placeholder value";
-              }
-              return true;
-            },
-          });
-
-          parsedHeaders.push({
-            name: headerName.trim(),
-            placeholder: headerPlaceholder.trim(),
-          });
-          log.info(`Added header: ${headerName}: ${headerPlaceholder}`);
-        }
-      }
+      const collected = await collectKeyValuePairs(
+        "Does the remote server require any authentication headers?",
+        "Enter header name (or leave empty to finish):",
+        (name) => `Enter placeholder for ${name} (e.g., YOUR_API_KEY):`,
+        "header",
+      );
+      headers = collected.map((h) => ({ name: h.name, placeholder: h.value }));
     } catch (error) {
       handleCancel(error);
     }
   }
 
-  // Convert parsed headers to DocHeader format
-  const headers: DocHeader[] = parsedHeaders.map((header) => ({
-    name: header.name,
-    placeholder: header.placeholder,
-  }));
+  // Collect env vars interactively only if in interactive mode, has local methods, and none provided via flags
+  const hasLocalMethods = installMethods.some((m) => m.type === "local");
+  if (isInteractiveMode && hasLocalMethods && envVars.length === 0) {
+    try {
+      const collected = await collectKeyValuePairs(
+        "Does the local server require any environment variables?",
+        "Enter environment variable name (or leave empty to finish):",
+        (name) => `Enter placeholder for ${name} (e.g., YOUR_API_KEY):`,
+        "env var",
+      );
+      envVars = collected.map((e) => ({ name: e.name, placeholder: e.value }));
+    } catch (error) {
+      handleCancel(error);
+    }
+  }
+
+  // Collect sections interactively only if in interactive mode and none provided via flags
+  if (isInteractiveMode && sections.length === 0) {
+    try {
+      const collected = await collectKeyValuePairs(
+        "Would you like to add custom sections (e.g., Introduction, Features)?",
+        "Enter section title (or leave empty to finish):",
+        (title) => `Enter content for "${title}":`,
+        "section",
+      );
+      sections = collected.map((s) => ({ title: s.name, content: s.value }));
+    } catch (error) {
+      handleCancel(error);
+    }
+  }
 
   // Use the first install method to connect to the server
   const connectionTarget = installMethods[0];
@@ -377,6 +476,8 @@ export async function docCommand(args: string[]) {
     ...docData,
     installMethods,
     headers,
+    envVars,
+    sections,
   });
   const absolutePath = path.resolve(outputPath);
 

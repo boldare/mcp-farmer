@@ -119,9 +119,11 @@ mcp-farmer doc --remote https://mcp.example.com/sse   # Remote server
 mcp-farmer doc --local "npx -y @example/mcp-server"   # Local server
 mcp-farmer doc --remote https://prod.example.com --local "npx -y @example/mcp-server"  # Multiple methods
 mcp-farmer doc --remote https://mcp.example.com/sse --out docs.html  # Write to file
+mcp-farmer doc --remote https://mcp.example.com/sse --header "Authorization: YOUR_TOKEN"  # With required headers
+mcp-farmer doc --local "npx -y @example/mcp-server" --env "API_KEY: YOUR_API_KEY"  # With required env vars
 ```
 
-Generates a single-page HTML documentation for an MCP server with sidebar navigation, tool/resource/prompt cards, dark mode support, and responsive design. Use `--remote` or `--local` to specify installation methods (can be combined), and `--out` to write directly to a file.
+Generates a single-page HTML documentation for an MCP server with sidebar navigation, tool/resource/prompt cards, dark mode support, and responsive design. Use `--remote` or `--local` to specify installation methods (can be combined), `--header` to document required headers for remote servers (format: `"Name: PLACEHOLDER"`), `--env` to document required environment variables for local servers (format: `"NAME: PLACEHOLDER"`), and `--out` to write directly to a file.
 
 ### `grow` — Generate MCP tools from API specs
 

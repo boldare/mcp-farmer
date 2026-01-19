@@ -106,7 +106,9 @@ mcp-farmer is a CLI tool for managing and analyzing MCP (Model Context Protocol)
   - `acp.ts` - ACP client implementation for probe: tracks tool calls and displays progress
 - `src/doc/` - Doc command: generate beautiful HTML documentation for an MCP server
   - `command.ts` - Doc command logic: connects to server, fetches capabilities, prompts for output path, generates HTML
-  - `html.ts` - HTML documentation generator with sidebar navigation, tool/resource/prompt cards, and Mintlify-inspired styling
+  - `html.ts` - HTML documentation generator: types, utilities, render functions, and main orchestrator
+  - `styles.ts` - CSS styles for the generated HTML documentation
+  - `scripts.ts` - SVG icons and client-side JavaScript for theme toggle, search, and copy functionality
 - `tests/` - Test files
   - `integration/` - Integration tests that spawn the CLI
   - `testdata/` - Test fixtures like example openapi files
