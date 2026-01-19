@@ -5,6 +5,7 @@ import { marketCommand } from "./src/market/command.js";
 import { tryCommand } from "./src/try/command.js";
 import { growCommand } from "./src/grow/command.js";
 import { probeCommand } from "./src/probe/command.js";
+import { docCommand } from "./src/doc/command.js";
 import {
   getExitCode,
   isUserCancelledError,
@@ -19,6 +20,7 @@ A CLI tool for managing and analyzing MCP servers.
 
 Commands:
   vet <url>        Vet an MCP server by connecting and running checks
+  doc <url>        Generate beautiful HTML documentation for an MCP server
   new              Create a new MCP server project
   market           Browse and install popular MCP servers
   try <url>        Interactively call a tool on an MCP server
@@ -51,6 +53,9 @@ async function main() {
   switch (command) {
     case "vet":
       await vetCommand(subcommandArgs);
+      break;
+    case "doc":
+      await docCommand(subcommandArgs);
       break;
     case "new":
       await newCommand(subcommandArgs);

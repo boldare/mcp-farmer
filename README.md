@@ -11,7 +11,7 @@ While this tool is stable and ready to be used you can expect new features and i
 - **Ship MCP servers faster**: scaffold a server, generate tools from OpenAPI/GraphQL, and validate tool quality.
 - **Trust but verify**: vet third‑party MCP servers (including `/health`, tools, prompts, and resources) before adding them to your client.
 - **Better tool UX for LLMs**: catch missing descriptions/schemas/annotations and other issues that reduce reliability.
-- **Shareable outputs**: generate **HTML/JSON/Markdown** vet reports and a **Markdown probe report** you can attach to PRs/issues.
+- **Shareable outputs**: generate **HTML/JSON/Markdown** vet reports, **HTML documentation**, and a **Markdown probe report** you can attach to PRs/issues.
 
 ## Highlights
 
@@ -41,6 +41,7 @@ Usage: mcp-farmer <command> [options]
 
 Commands:
   vet [url]    Vet an MCP server (auto-detects from config if no URL)
+  doc <url>    Generate beautiful HTML documentation for an MCP server
   new          Create a new MCP server project
   market       Browse and install popular MCP servers
   try <url>    Interactively call tools, read resources, or get prompts on an MCP server
@@ -109,6 +110,18 @@ mcp-farmer try -- npx -y @modelcontextprotocol/server-memory  # Stdio
 ```
 
 Interactively explore an MCP server: call **tools**, read **resources**, and get **prompts**. Provides a searchable list of all available items with type-ahead filtering.
+
+### `doc` — Generate HTML documentation
+
+```bash
+mcp-farmer doc                                        # Interactive mode
+mcp-farmer doc --remote https://mcp.example.com/sse   # Remote server
+mcp-farmer doc --local "npx -y @example/mcp-server"   # Local server
+mcp-farmer doc --remote https://prod.example.com --local "npx -y @example/mcp-server"  # Multiple methods
+mcp-farmer doc --remote https://mcp.example.com/sse --out docs.html  # Write to file
+```
+
+Generates a single-page HTML documentation for an MCP server with sidebar navigation, tool/resource/prompt cards, dark mode support, and responsive design. Use `--remote` or `--local` to specify installation methods (can be combined), and `--out` to write directly to a file.
 
 ### `grow` — Generate MCP tools from API specs
 
