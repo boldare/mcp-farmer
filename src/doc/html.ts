@@ -139,7 +139,7 @@ function renderToolCard(tool: Tool, isFirst = false): string {
             <div class="param-header">
               <code class="param-name">${escapeHtml(name)}</code>
               <span class="param-type">${escapeHtml(type)}</span>
-              ${isRequired ? '<span class="required-badge">required</span>' : ''}
+              ${isRequired ? '<span class="required-badge">required</span>' : ""}
             </div>
             <p class="param-desc">${desc ? escapeHtml(desc) : '<span class="no-desc">No description</span>'}</p>
           </div>`;
@@ -205,7 +205,7 @@ function renderToolCard(tool: Tool, isFirst = false): string {
         ${renderAnnotationBadges(tool.annotations)}
       </summary>
       <div class="card-content">
-        <p class="card-description">${tool.description ? escapeHtml(tool.description) : '<em>No description provided</em>'}</p>
+        <p class="card-description">${tool.description ? escapeHtml(tool.description) : "<em>No description provided</em>"}</p>
         ${inputsHtml}
         ${outputsHtml}
         ${exampleHtml}
@@ -225,7 +225,7 @@ function renderResourceCard(resource: Resource, isFirst = false): string {
       </summary>
       <div class="card-content">
         <p class="card-uri"><code>${escapeHtml(resource.uri)}</code></p>
-        <p class="card-description">${resource.description ? escapeHtml(resource.description) : '<em>No description provided</em>'}</p>
+        <p class="card-description">${resource.description ? escapeHtml(resource.description) : "<em>No description provided</em>"}</p>
       </div>
     </details>`;
 }
@@ -242,7 +242,7 @@ function renderPromptCard(prompt: Prompt, isFirst = false): string {
           <div class="param-item">
             <div class="param-header">
               <code class="param-name">${escapeHtml(arg.name)}</code>
-              ${arg.required ? '<span class="required-badge">required</span>' : ''}
+              ${arg.required ? '<span class="required-badge">required</span>' : ""}
             </div>
             <p class="param-desc">${arg.description ? escapeHtml(arg.description) : '<span class="no-desc">No description</span>'}</p>
           </div>`;
@@ -264,7 +264,7 @@ function renderPromptCard(prompt: Prompt, isFirst = false): string {
         </div>
       </summary>
       <div class="card-content">
-        <p class="card-description">${prompt.description ? escapeHtml(prompt.description) : '<em>No description provided</em>'}</p>
+        <p class="card-description">${prompt.description ? escapeHtml(prompt.description) : "<em>No description provided</em>"}</p>
         ${argsHtml}
       </div>
     </details>`;
@@ -367,9 +367,7 @@ function renderLocalSection(
   envVars: DocEnvVar[],
 ): string {
   const safeName = serverName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  const envFlags = envVars
-    .map((e) => `-e ${e.name}`)
-    .join(" ");
+  const envFlags = envVars.map((e) => `-e ${e.name}`).join(" ");
   const claudeCmd = `claude mcp add ${safeName}${envFlags ? ` ${envFlags}` : ""} -- ${command}`;
   const commandParts = command.split(/\s+/).filter(Boolean);
 
@@ -536,7 +534,12 @@ export function generateDocHtml(data: DocData): string {
   const customSectionsSidebarItems = renderCustomSectionsSidebarItems(sections);
 
   // Setup sections (Remote/Local)
-  const setupContent = renderSetupSections(installMethods, title, headers, envVars);
+  const setupContent = renderSetupSections(
+    installMethods,
+    title,
+    headers,
+    envVars,
+  );
   const setupSidebarItems = renderSetupSidebarItems(installMethods);
 
   // Main content

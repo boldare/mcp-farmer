@@ -253,16 +253,36 @@ export async function docCommand(args: string[]) {
   let sections: DocSection[];
 
   try {
-    const parsedHeaders = parseAllColonSeparated(values.header, "header", "placeholder");
-    headers = parsedHeaders.map((h) => ({ name: h.name, placeholder: h.value }));
+    const parsedHeaders = parseAllColonSeparated(
+      values.header,
+      "header",
+      "placeholder",
+    );
+    headers = parsedHeaders.map((h) => ({
+      name: h.name,
+      placeholder: h.value,
+    }));
 
-    const parsedEnvVars = parseAllColonSeparated(values.env, "env", "placeholder");
-    envVars = parsedEnvVars.map((e) => ({ name: e.name, placeholder: e.value }));
+    const parsedEnvVars = parseAllColonSeparated(
+      values.env,
+      "env",
+      "placeholder",
+    );
+    envVars = parsedEnvVars.map((e) => ({
+      name: e.name,
+      placeholder: e.value,
+    }));
 
-    const parsedSections = parseAllColonSeparated(values.section, "section", "content");
+    const parsedSections = parseAllColonSeparated(
+      values.section,
+      "section",
+      "content",
+    );
     sections = parsedSections.map((s) => ({ title: s.name, content: s.value }));
   } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+    console.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
     printHelp();
     process.exit(2);
   }
@@ -285,10 +305,11 @@ export async function docCommand(args: string[]) {
 
       while (true) {
         const isFirst = installMethods.length === 0;
-        const choices: { name: string; value: "remote" | "local" | "done" }[] = [
-          { name: "Remote (HTTP/SSE URL)", value: "remote" },
-          { name: "Local (stdio command)", value: "local" },
-        ];
+        const choices: { name: string; value: "remote" | "local" | "done" }[] =
+          [
+            { name: "Remote (HTTP/SSE URL)", value: "remote" },
+            { name: "Local (stdio command)", value: "local" },
+          ];
 
         // Only show "Done" option if at least one method has been added
         if (!isFirst) {
