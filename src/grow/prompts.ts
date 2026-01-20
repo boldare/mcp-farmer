@@ -387,3 +387,327 @@ ${params.operations}
 </operations>
 `.trim();
 }
+
+export interface MarkdownPromptParams {
+  cwd: string;
+  tools: string; // JSON stringified tools
+}
+
+export function buildMarkdownPrompt(params: MarkdownPromptParams): string {
+  return `
+<task>
+Generate MCP tools for browsing and reading markdown documentation.
+Each selected tool capability becomes one MCP tool.
+</task>
+
+<context>
+Working directory: ${params.cwd}
+Documentation root: Read from DOCS_PATH environment variable at runtime
+</context>
+
+${SHARED_WORKFLOW}
+
+${FILE_ORGANIZATION}
+
+${SHARED_RULES}
+
+## Markdown-Specific Rules
+
+1. All file paths are relative to DOCS_PATH environment variable
+2. Validate paths to prevent directory traversal attacks (reject paths containing "..")
+3. Only read .md and .mdx files
+4. Set a file size limit (e.g., 1MB) to prevent reading huge files
+5. Use Node.js built-in modules only (fs/promises, path)
+6. Handle errors gracefully with informative messages
+
+<example>
+For tool: docs_list_files
+
+Generated tool:
+\`\`\`typescript
+import { z } from "zod";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+
+const DOCS_PATH = process.env.DOCS_PATH;
+if (!DOCS_PATH) {
+  throw new Error("DOCS_PATH environment variable is required");
+}
+
+interface MarkdownFile {
+  path: string;
+  name: string;
+  size: number;
+}
+
+async function scanDirectory(dirPath: string): Promise<MarkdownFile[]> {
+  const files: MarkdownFile[] = [];
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory() && !entry.name.startsWith(".")) {
+      files.push(...await scanDirectory(fullPath));
+    } else if (entry.isFile()) {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (ext === ".md" || ext === ".mdx") {
+        const stat = await fs.stat(fullPath);
+        files.push({
+          path: path.relative(DOCS_PATH, fullPath),
+          name: path.basename(entry.name, ext),
+          size: stat.size
+        });
+      }
+    }
+  }
+  return files;
+}
+
+server.registerTool(
+  "docs_list_files",
+  {
+    title: "List Documentation Files",
+    description: \`List all markdown documentation files with metadata.
+
+Args:
+  - directory (string, optional): Subdirectory to list (default: root)
+
+Returns:
+  Array of file objects with path, name, and size.
+  Example: [{ path: "getting-started.md", name: "getting-started", size: 2048 }]
+
+Examples:
+  - List all docs → {}
+  - List guides folder → { directory: "guides" }
+
+Errors:
+  - Returns "Error: Directory not found" if path doesn't exist\`,
+    inputSchema: z.object({
+      directory: z.string()
+        .optional()
+        .describe("Subdirectory to list, relative to docs root")
+    }).strict(),
+    outputSchema: z.object({
+      files: z.array(z.object({
+        path: z.string().describe("Relative path to the file"),
+        name: z.string().describe("File name without extension"),
+        size: z.number().describe("File size in bytes")
+      })).describe("List of markdown files"),
+      count: z.number().describe("Total number of files")
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  async ({ directory }) => {
+    try {
+      const targetDir = directory 
+        ? path.join(DOCS_PATH, directory)
+        : DOCS_PATH;
+      
+      // Security: prevent directory traversal
+      const resolved = path.resolve(targetDir);
+      if (!resolved.startsWith(path.resolve(DOCS_PATH))) {
+        throw new Error("Invalid directory path");
+      }
+      
+      const files = await scanDirectory(resolved);
+      const result = { files, count: files.length };
+      
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: \`Error: \${error.message}\` }],
+        isError: true
+      };
+    }
+  }
+);
+\`\`\`
+</example>
+
+<example>
+For tool: docs_read_file
+
+Generated tool:
+\`\`\`typescript
+server.registerTool(
+  "docs_read_file",
+  {
+    title: "Read Documentation File",
+    description: \`Read the content of a markdown documentation file.
+
+Args:
+  - path (string): Relative path to the markdown file
+
+Returns:
+  The file content as text, with metadata.
+  Example: { content: "# Title\\n\\nContent...", size: 1024 }
+
+Examples:
+  - Read README → { path: "README.md" }
+  - Read nested file → { path: "guides/quickstart.md" }
+
+Errors:
+  - Returns "Error: File not found" if path doesn't exist
+  - Returns "Error: File too large" if over 1MB\`,
+    inputSchema: z.object({
+      path: z.string()
+        .min(1, "Path is required")
+        .describe("Relative path to the markdown file")
+    }).strict(),
+    outputSchema: z.object({
+      content: z.string().describe("File content"),
+      path: z.string().describe("File path"),
+      size: z.number().describe("File size in bytes")
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  async ({ path: filePath }) => {
+    try {
+      // Security: validate extension
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext !== ".md" && ext !== ".mdx") {
+        throw new Error("Only .md and .mdx files are allowed");
+      }
+      
+      const fullPath = path.join(DOCS_PATH, filePath);
+      const resolved = path.resolve(fullPath);
+      
+      // Security: prevent directory traversal
+      if (!resolved.startsWith(path.resolve(DOCS_PATH))) {
+        throw new Error("Invalid file path");
+      }
+      
+      const stat = await fs.stat(resolved);
+      const MAX_SIZE = 1024 * 1024; // 1MB
+      if (stat.size > MAX_SIZE) {
+        throw new Error("File too large (max 1MB)");
+      }
+      
+      const content = await fs.readFile(resolved, "utf8");
+      const result = { content, path: filePath, size: stat.size };
+      
+      return {
+        content: [{ type: "text", text: content }],
+        structuredContent: result
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: \`Error: \${error.message}\` }],
+        isError: true
+      };
+    }
+  }
+);
+\`\`\`
+</example>
+
+<example>
+For tool: docs_search
+
+Generated tool:
+\`\`\`typescript
+server.registerTool(
+  "docs_search",
+  {
+    title: "Search Documentation",
+    description: \`Search for text across all markdown documentation files.
+
+Args:
+  - query (string): Text to search for (case-insensitive)
+  - limit (number, optional): Maximum results to return (default: 20)
+
+Returns:
+  Array of matches with file path, line number, and matching line.
+  Example: [{ path: "guide.md", line: 42, content: "...matching text..." }]
+
+Examples:
+  - Search for "installation" → { query: "installation" }
+  - Search with limit → { query: "api", limit: 5 }
+
+Errors:
+  - Returns "Error: Query too short" if less than 2 characters\`,
+    inputSchema: z.object({
+      query: z.string()
+        .min(2, "Query must be at least 2 characters")
+        .max(100, "Query too long")
+        .describe("Text to search for"),
+      limit: z.number()
+        .int()
+        .min(1)
+        .max(100)
+        .default(20)
+        .describe("Maximum results to return")
+    }).strict(),
+    outputSchema: z.object({
+      matches: z.array(z.object({
+        path: z.string().describe("File path"),
+        line: z.number().describe("Line number"),
+        content: z.string().describe("Matching line content")
+      })).describe("Search matches"),
+      count: z.number().describe("Total matches found")
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  async ({ query, limit }) => {
+    try {
+      const files = await scanDirectory(DOCS_PATH);
+      const matches: { path: string; line: number; content: string }[] = [];
+      const queryLower = query.toLowerCase();
+      
+      for (const file of files) {
+        if (matches.length >= limit) break;
+        
+        const fullPath = path.join(DOCS_PATH, file.path);
+        const content = await fs.readFile(fullPath, "utf8");
+        const lines = content.split("\\n");
+        
+        for (let i = 0; i < lines.length && matches.length < limit; i++) {
+          if (lines[i].toLowerCase().includes(queryLower)) {
+            matches.push({
+              path: file.path,
+              line: i + 1,
+              content: lines[i].trim().slice(0, 200)
+            });
+          }
+        }
+      }
+      
+      const result = { matches, count: matches.length };
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: \`Error: \${error.message}\` }],
+        isError: true
+      };
+    }
+  }
+);
+\`\`\`
+</example>
+
+<tools>
+${params.tools}
+</tools>
+`.trim();
+}
