@@ -530,10 +530,7 @@ async function handleMarkdownFeature(): Promise<void> {
     .map((i) => MARKDOWN_TOOLS[i])
     .filter((t): t is MarkdownTool => t !== undefined);
 
-  log(
-    "selected_tools",
-    selectedTools.map((t) => t.name).join(", "),
-  );
+  log("selected_tools", selectedTools.map((t) => t.name).join(", "));
 
   const agentChoice = await selectCodingAgent();
   if (!agentChoice) {
