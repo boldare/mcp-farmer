@@ -387,3 +387,144 @@ ${params.operations}
 </operations>
 `.trim();
 }
+
+export interface MarkdownPromptParams {
+  cwd: string;
+  tools: string; // JSON stringified tools
+}
+
+export function buildMarkdownPrompt(params: MarkdownPromptParams): string {
+  return `
+<task>
+Generate MCP tools for browsing and reading markdown documentation.
+Each selected tool capability becomes one MCP tool.
+</task>
+
+<context>
+Working directory: ${params.cwd}
+Documentation root: Read from DOCS_PATH environment variable at runtime
+</context>
+
+${SHARED_WORKFLOW}
+
+${FILE_ORGANIZATION}
+
+${SHARED_RULES}
+
+## Markdown-Specific Rules
+
+### Environment Setup
+Validate DOCS_PATH at module load:
+\`\`\`typescript
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+
+const DOCS_PATH = process.env.DOCS_PATH;
+if (!DOCS_PATH) throw new Error("DOCS_PATH environment variable is required");
+\`\`\`
+
+### Security Requirements
+1. **Path traversal prevention**: Always resolve and validate paths stay within DOCS_PATH
+   \`\`\`typescript
+   const resolved = path.resolve(path.join(DOCS_PATH, userPath));
+   if (!resolved.startsWith(path.resolve(DOCS_PATH))) {
+     throw new Error("Invalid path");
+   }
+   \`\`\`
+2. **Extension whitelist**: Only allow .md and .mdx files
+3. **Size limit**: Reject files over 1MB to prevent memory issues
+
+### Shared Helper
+Create a reusable scanner for tools that need to enumerate files:
+\`\`\`typescript
+async function scanMarkdownFiles(dir: string): Promise<{path: string; name: string; size: number}[]>
+\`\`\`
+Recursively finds .md/.mdx files, skips hidden directories, returns relative paths.
+
+### Tool Annotations
+All documentation tools are read-only with a closed filesystem:
+- readOnlyHint: true
+- destructiveHint: false
+- idempotentHint: true
+- openWorldHint: false (bounded to DOCS_PATH)
+
+### Tool Specifications
+
+| Tool | Purpose | Key Inputs | Returns |
+|------|---------|------------|---------|
+| docs_list_files | Enumerate markdown files | directory? (subdirectory filter) | Array of {path, name, size} |
+| docs_read_file | Read single file content | path (required) | {content, path, size} |
+| docs_search | Text search across files | query, limit? | Array of {path, line, content} |
+
+<example>
+docs_read_file implementation showing all patterns:
+
+\`\`\`typescript
+server.registerTool(
+  "docs_read_file",
+  {
+    title: "Read Documentation File",
+    description: \`Read the content of a markdown documentation file.
+
+Args:
+  - path (string): Relative path to the markdown file
+
+Returns:
+  The file content with metadata: { content, path, size }
+
+Errors:
+  - "File not found" if path doesn't exist
+  - "File too large" if over 1MB
+  - "Invalid path" for traversal attempts\`,
+    inputSchema: z.object({
+      path: z.string().min(1).describe("Relative path to markdown file")
+    }).strict(),
+    outputSchema: z.object({
+      content: z.string().describe("File content"),
+      path: z.string().describe("File path"),
+      size: z.number().describe("File size in bytes")
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  async ({ path: filePath }) => {
+    try {
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext !== ".md" && ext !== ".mdx") {
+        throw new Error("Only .md and .mdx files allowed");
+      }
+
+      const resolved = path.resolve(path.join(DOCS_PATH, filePath));
+      if (!resolved.startsWith(path.resolve(DOCS_PATH))) {
+        throw new Error("Invalid path");
+      }
+
+      const stat = await fs.stat(resolved);
+      if (stat.size > 1024 * 1024) throw new Error("File too large");
+
+      const content = await fs.readFile(resolved, "utf8");
+      const result = { content, path: filePath, size: stat.size };
+      return {
+        content: [{ type: "text", text: content }],
+        structuredContent: result
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: \`Error: \${error.message}\` }],
+        isError: true
+      };
+    }
+  }
+);
+\`\`\`
+</example>
+
+<tools>
+${params.tools}
+</tools>
+`.trim();
+}

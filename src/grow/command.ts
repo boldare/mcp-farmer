@@ -9,8 +9,13 @@ import {
   type GraphQLOperation,
   type GraphQLOperationWithFieldMapping,
 } from "./graphql.js";
+import { MARKDOWN_TOOLS, type MarkdownTool } from "./markdown.js";
 import { CodingClient } from "./acp.js";
-import { buildOpenAPIPrompt, buildGraphQLPrompt } from "./prompts.js";
+import {
+  buildOpenAPIPrompt,
+  buildGraphQLPrompt,
+  buildMarkdownPrompt,
+} from "./prompts.js";
 import { log, initLog } from "../shared/log.js";
 import { pluralize } from "../shared/text.js";
 import {
@@ -39,13 +44,15 @@ Generate MCP capabilities
 Features:
   openapi      Provide OpenAPI specification, select endpoints and fields
   graphql      Provide GraphQL endpoint URL, select queries/mutations and fields
+  markdown     Provide a docs directory, generate tools to browse/read/search
 
 Options:
   --help       Show this help message
 
 Examples:
   mcp-farmer grow openapi
-  mcp-farmer grow graphql`);
+  mcp-farmer grow graphql
+  mcp-farmer grow markdown`);
 }
 
 function formatEndpointLabel(endpoint: OpenAPIOperation): string {
@@ -491,6 +498,56 @@ async function handleGraphQLFeature(): Promise<void> {
   await runAgentWithPrompt(agentChoice, promptText, selectedOperations.length);
 }
 
+async function handleMarkdownFeature(): Promise<void> {
+  note(
+    "Generate tools for browsing and reading markdown documentation.\nThe generated tools will read from DOCS_PATH environment variable.",
+    "Markdown Docs Tools",
+  );
+
+  const toolChoices = MARKDOWN_TOOLS.map((tool, index) => ({
+    value: index,
+    name: tool.name,
+    description: tool.description,
+    checked: true,
+  }));
+
+  let selectedIndices: number[];
+  try {
+    selectedIndices = await checkbox({
+      message: "Select tools to generate:",
+      choices: toolChoices,
+    });
+
+    if (selectedIndices.length === 0) {
+      cancel("At least one tool must be selected.");
+      process.exit(0);
+    }
+  } catch (error) {
+    handleCancel(error);
+  }
+
+  const selectedTools = selectedIndices
+    .map((i) => MARKDOWN_TOOLS[i])
+    .filter((t): t is MarkdownTool => t !== undefined);
+
+  log("selected_tools", selectedTools.map((t) => t.name).join(", "));
+
+  const agentChoice = await selectCodingAgent();
+  if (!agentChoice) {
+    log("cancelled", "agent selection");
+    process.exit(0);
+  }
+
+  log("selected_agent", agentChoice);
+
+  const promptText = buildMarkdownPrompt({
+    cwd: process.cwd(),
+    tools: JSON.stringify(selectedTools, null, 2),
+  });
+
+  await runAgentWithPrompt(agentChoice, promptText, selectedTools.length);
+}
+
 export async function growCommand(args: string[]) {
   if (args.includes("--help") || args.includes("-h")) {
     printHelp();
@@ -513,9 +570,11 @@ export async function growCommand(args: string[]) {
     await handleOpenApiFeature();
   } else if (feature === "graphql") {
     await handleGraphQLFeature();
+  } else if (feature === "markdown") {
+    await handleMarkdownFeature();
   } else {
     promptLog.error(
-      `Invalid feature: ${feature}. Valid features are: openapi, graphql`,
+      `Invalid feature: ${feature}. Valid features are: openapi, graphql, markdown`,
     );
     printHelp();
     process.exit(2);
