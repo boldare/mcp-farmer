@@ -287,6 +287,7 @@ export function createSessionUpdateHandler(handlers: SessionUpdateHandlers) {
   return async function sessionUpdate({
     update,
   }: acp.SessionNotification): Promise<void> {
+    log("session_update", JSON.stringify(update));
     try {
       if (update.sessionUpdate === "tool_call") {
         const title = update.title?.toLowerCase() || "";
