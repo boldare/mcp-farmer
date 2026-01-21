@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.3.0](https://github.com/boldare/mcp-farmer/compare/v1.2.0...v1.3.0) (2026-01-21)
+
+
+### Features
+
+* add check for description quality ([bd51dbe](https://github.com/boldare/mcp-farmer/commit/bd51dbe94e095ca1d980cbc1b174defe6f6655bf))
+* add doc command ([3a1270a](https://github.com/boldare/mcp-farmer/commit/3a1270ace33cd412460c9f847d51e6bf8bf1a1e3))
+* add eval command for autonomous MCP server tool evaluation ([#6](https://github.com/boldare/mcp-farmer/issues/6)) ([a0d1a1f](https://github.com/boldare/mcp-farmer/commit/a0d1a1f2338a4ff2ed0b823a984f53acf2230666))
+* add grow command with option to add tools from OpenAPI specification using ACP ([#5](https://github.com/boldare/mcp-farmer/issues/5)) ([a2935a4](https://github.com/boldare/mcp-farmer/commit/a2935a49c44904e81319c5e0e4c5b6e08fc9e2b4))
+* add logs for grow command ([5598c24](https://github.com/boldare/mcp-farmer/commit/5598c248a4f80b019b06402ff7350beacd5247ed))
+* add markdown option to grow command ([#7](https://github.com/boldare/mcp-farmer/issues/7)) ([745999a](https://github.com/boldare/mcp-farmer/commit/745999a07c48f44d40b3607acf717ec1495db2cd))
+* add markdown output for vet command ([a36e250](https://github.com/boldare/mcp-farmer/commit/a36e250bcc0e8bdc69389b70665a6ae2436aac1c))
+* add netlify deploy template option ([6a3bcf1](https://github.com/boldare/mcp-farmer/commit/6a3bcf1cfe4f631481fd616a82a8a34b66819729))
+* add passthrough for ouput schema to fix under documented endpoints ([0bcc360](https://github.com/boldare/mcp-farmer/commit/0bcc360437157251718b53ddda1fd68ec87d25be))
+* add prompts for user to use other commands ([9b57a60](https://github.com/boldare/mcp-farmer/commit/9b57a60f8cd7a83605b2332587926619d82e6ee5))
+* add ux improvements to generated docs ([1b7f0d9](https://github.com/boldare/mcp-farmer/commit/1b7f0d98f26a043b7a56e231e50ab1e73f9e6899))
+* allow using serach for models in acp ([b40bb23](https://github.com/boldare/mcp-farmer/commit/b40bb23d63b5858bfb7984f4cfbe1925a2e74b1f))
+* check if tool has annotation ([04ef256](https://github.com/boldare/mcp-farmer/commit/04ef25667243bf7c2001b2b6a86b4c4f2cbe8b76))
+* display more context for openapi grow ([b87ef7b](https://github.com/boldare/mcp-farmer/commit/b87ef7b12c3ddba4b88caf8e57a33be9cc26feea))
+* improve grow prompts ([64480ab](https://github.com/boldare/mcp-farmer/commit/64480abbd98a1185cbff54a537c5f5ebe1619834))
+* improve robustness of the commands ([9802b68](https://github.com/boldare/mcp-farmer/commit/9802b68f95de3e8a054a59ac52d9d55599947cb7))
+* improve spinner info while eval command runs ([add3689](https://github.com/boldare/mcp-farmer/commit/add368984cf5276a5bbd109e446f4b20c2c4041b))
+* make the code more robust and allow accepting more http input target ([2bffbfb](https://github.com/boldare/mcp-farmer/commit/2bffbfba4acd3fcb896bc98caea9f77b8756c366))
+* rename eval to probe to better fit the actual logic ([e8f9546](https://github.com/boldare/mcp-farmer/commit/e8f95461e973d83a1334d410991a80eab936b12d))
+* select model for grow command via acp ([da9e253](https://github.com/boldare/mcp-farmer/commit/da9e253245ccd3a21122a0c1c82b8f6c8ada4c43))
+* showcase more progress during grow command ([7828f80](https://github.com/boldare/mcp-farmer/commit/7828f80feb4d3616a0df01278e19ecc30a0cfb87))
+* showcase more progress during probe command ([4d8f2d3](https://github.com/boldare/mcp-farmer/commit/4d8f2d39b5b019167c1945503b52f9b038d44aba))
+* simplify new server type flag ([e820d34](https://github.com/boldare/mcp-farmer/commit/e820d34434bbc17f6a84bfe19eb4cebf27306e45))
+* simplify try command and add prompt item ([c1dcdb4](https://github.com/boldare/mcp-farmer/commit/c1dcdb4b399011304e6b77cbdcb0b30c139d3315))
+* simplify visual output ([4ac0a3b](https://github.com/boldare/mcp-farmer/commit/4ac0a3b785ee641c543e8fc76ee1a285adcc9a65))
+* support gemini cli in market command ([54566e0](https://github.com/boldare/mcp-farmer/commit/54566e008f58610e59f8729d73e81f6f91e45ccf))
+* support github copilot cli in grow command ([408e6eb](https://github.com/boldare/mcp-farmer/commit/408e6ebf7602c7908cdd1ca0f2254339310b530f))
+* support graphql in grow command ([2f3e272](https://github.com/boldare/mcp-farmer/commit/2f3e272574cbcf9ec821a783578ac2059ee9116a))
+* use heading for markdown report ([83aa78e](https://github.com/boldare/mcp-farmer/commit/83aa78eed91201a786b2cbf3f4b01a335d125ec7))
+* vet mcp servers from config files ([0b6fe0d](https://github.com/boldare/mcp-farmer/commit/0b6fe0d3ee2f3967ba6ede5ca77617e3195fcbd4))
+
+
+### Bug Fixes
+
+* close commands after success ([7a1b802](https://github.com/boldare/mcp-farmer/commit/7a1b802d2917c7a75d9be46351d919c5fc6ea1d4))
+* increase inquirer select prompt calls ([93511bb](https://github.com/boldare/mcp-farmer/commit/93511bb6065c06396ae3357780b66aee72b3a597))
+
 ## [1.2.0](https://github.com/boldare/mcp-farmer/compare/v1.1.0...v1.2.0) (2025-12-17)
 
 
