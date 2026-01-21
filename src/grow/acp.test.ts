@@ -83,6 +83,8 @@ describe("CodingClient spinner progress", () => {
     );
 
     const message = spinner.getLastMessage();
-    expect(message).toMatchInlineSnapshot(`"Writing code (1 file created, 1 file analyzed, 1 path listed, 1 search, 1 command)"`)
+    expect(message).toMatchInlineSnapshot(
+      `"Writing code (1 file created, 1 file analyzed, 1 path listed, 1 search, 1 command)"`,
+    );
   });
 });

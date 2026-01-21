@@ -7,13 +7,7 @@ import {
 } from "../shared/acp.js";
 import { type SpinnerInstance } from "../shared/prompts.js";
 
-type ActionType =
-  | "read"
-  | "list"
-  | "write"
-  | "search"
-  | "command"
-  | "other";
+type ActionType = "read" | "list" | "write" | "search" | "command" | "other";
 
 interface AgentProgress {
   filesRead: number;
