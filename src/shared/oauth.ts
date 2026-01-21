@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
 import type {
@@ -30,6 +30,7 @@ export class CliOAuthProvider implements OAuthClientProvider {
   #codeVerifier?: string;
   #callbackServer?: Server;
   #port: number;
+  #expectedState?: string;
 
   constructor(port: number = DEFAULT_PORT) {
     this.#port = port;
@@ -50,7 +51,9 @@ export class CliOAuthProvider implements OAuthClientProvider {
   }
 
   state(): string {
-    return randomBytes(16).toString("hex");
+    const state = randomBytes(16).toString("hex");
+    this.#expectedState = state;
+    return state;
   }
 
   clientInformation(): OAuthClientInformation | undefined {
@@ -83,15 +86,16 @@ export class CliOAuthProvider implements OAuthClientProvider {
   redirectToAuthorization(authorizationUrl: URL): void {
     console.log("\nOpening browser for authorization...");
     console.log(`URL: ${authorizationUrl.toString()}\n`);
+    const url = authorizationUrl.toString();
 
-    const openCommand =
+    const command =
       process.platform === "darwin"
-        ? "open"
+        ? { cmd: "open", args: [url] }
         : process.platform === "win32"
-          ? "start"
-          : "xdg-open";
+          ? { cmd: "cmd", args: ["/c", "start", "", url] }
+          : { cmd: "xdg-open", args: [url] };
 
-    exec(`${openCommand} "${authorizationUrl.toString()}"`, (error) => {
+    execFile(command.cmd, command.args, (error) => {
       if (error) {
         console.warn(
           "Warning: Could not automatically open browser. Please open the URL manually in your browser.",
@@ -116,6 +120,7 @@ export class CliOAuthProvider implements OAuthClientProvider {
 
         const url = new URL(req.url, `http://127.0.0.1:${this.#port}`);
         const code = url.searchParams.get("code");
+        const state = url.searchParams.get("state");
         const error = url.searchParams.get("error");
         const errorDescription = url.searchParams.get("error_description");
 
@@ -143,6 +148,14 @@ export class CliOAuthProvider implements OAuthClientProvider {
           return;
         }
 
+        if (this.#expectedState && state !== this.#expectedState) {
+          res.writeHead(400, { "Content-Type": "text/html" });
+          res.end(htmlPage("Invalid Authorization State", "#dc2626"));
+          this.stopCallbackServer();
+          reject(new Error("Invalid OAuth state"));
+          return;
+        }
+
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(
           htmlPage(
@@ -152,6 +165,7 @@ export class CliOAuthProvider implements OAuthClientProvider {
           ),
         );
         this.stopCallbackServer();
+        this.#expectedState = undefined;
         resolve(code);
       });
 
