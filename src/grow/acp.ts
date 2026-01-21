@@ -7,49 +7,90 @@ import {
 } from "../shared/acp.js";
 import { type SpinnerInstance } from "../shared/prompts.js";
 
+type ActionType =
+  | "read"
+  | "list"
+  | "write"
+  | "search"
+  | "command"
+  | "other";
+
 interface AgentProgress {
   filesRead: number;
   filesWritten: number;
+  pathsListed: number;
+  searches: number;
+  commandsRun: number;
   currentAction: string;
+  currentActionType: ActionType;
+}
+
+interface ActionResult {
+  action: string;
+  type: ActionType;
 }
 
 function getActionMessage(
   kind: acp.ToolKind | null | undefined,
   title: string | null | undefined,
-): string {
+): ActionResult {
   const kindStr = kind?.toString() || "other";
   const titleLower = title?.toLowerCase() || "";
 
   if (kindStr === "read") {
     if (titleLower === "list" || titleLower.includes("list")) {
-      return "Exploring project structure";
+      return { action: "Exploring project structure", type: "list" };
     }
-    return "Reading project files";
+    return { action: "Reading project files", type: "read" };
   }
 
-  if (kindStr === "edit") {
-    return "Writing code";
+  if (kindStr === "edit" || titleLower.startsWith("write ")) {
+    return { action: "Writing code", type: "write" };
   }
 
   if (titleLower.includes("search") || titleLower.includes("grep")) {
-    return "Searching codebase";
+    return { action: "Searching codebase", type: "search" };
   }
 
   if (titleLower.includes("shell") || titleLower.includes("terminal")) {
-    return "Running commands";
+    return { action: "Running commands", type: "command" };
   }
 
-  return "Working";
+  return { action: "Working", type: "other" };
 }
 
 function formatProgressMessage(progress: AgentProgress): string {
   const parts: string[] = [progress.currentAction];
 
+  const stats: string[] = [];
+
   if (progress.filesWritten > 0) {
     const fileWord = progress.filesWritten === 1 ? "file" : "files";
-    parts.push(`(${progress.filesWritten} ${fileWord} created)`);
-  } else if (progress.filesRead > 0 && progress.filesWritten === 0) {
-    parts.push(`(${progress.filesRead} files analyzed)`);
+    stats.push(`${progress.filesWritten} ${fileWord} created`);
+  }
+
+  if (progress.filesRead > 0) {
+    const fileWord = progress.filesRead === 1 ? "file" : "files";
+    stats.push(`${progress.filesRead} ${fileWord} analyzed`);
+  }
+
+  if (progress.pathsListed > 0) {
+    const pathWord = progress.pathsListed === 1 ? "path" : "paths";
+    stats.push(`${progress.pathsListed} ${pathWord} listed`);
+  }
+
+  if (progress.searches > 0) {
+    const searchWord = progress.searches === 1 ? "search" : "searches";
+    stats.push(`${progress.searches} ${searchWord}`);
+  }
+
+  if (progress.commandsRun > 0) {
+    const commandWord = progress.commandsRun === 1 ? "command" : "commands";
+    stats.push(`${progress.commandsRun} ${commandWord}`);
+  }
+
+  if (stats.length > 0) {
+    parts.push(`(${stats.join(", ")})`);
   }
 
   return parts.join(" ");
@@ -60,7 +101,11 @@ export class CodingClient implements acp.Client {
   private progress: AgentProgress = {
     filesRead: 0,
     filesWritten: 0,
-    currentAction: "Starting",
+    pathsListed: 0,
+    searches: 0,
+    commandsRun: 0,
+    currentAction: "Preparing workspace",
+    currentActionType: "other",
   };
 
   setSpinner(spinner: SpinnerInstance): void {
@@ -71,6 +116,12 @@ export class CodingClient implements acp.Client {
     if (this.spinner) {
       this.spinner.stop(message);
       this.spinner = null;
+    }
+  }
+
+  private updateSpinner(): void {
+    if (this.spinner) {
+      this.spinner.message(formatProgressMessage(this.progress));
     }
   }
 
@@ -85,19 +136,30 @@ export class CodingClient implements acp.Client {
 
   sessionUpdate = createSessionUpdateHandler({
     onToolCall: (update) => {
-      this.progress.currentAction = getActionMessage(update.kind, update.title);
+      const { action, type } = getActionMessage(update.kind, update.title);
+      this.progress.currentAction = action;
+      this.progress.currentActionType = type;
+      this.updateSpinner();
     },
     onToolCallUpdate: (update) => {
       const { status, kind } = update;
       const kindStr = kind?.toString() || "other";
+      const { type } = getActionMessage(update.kind, update.title);
 
       if (status === "completed") {
-        if (kindStr === "read") {
+        if (type === "list") {
+          this.progress.pathsListed++;
+        } else if (type === "read") {
           this.progress.filesRead++;
-        } else if (kindStr === "edit") {
+        } else if (type === "write" || kindStr === "edit") {
           this.progress.filesWritten++;
           this.progress.currentAction = "Writing code";
+        } else if (type === "search") {
+          this.progress.searches++;
+        } else if (type === "command") {
+          this.progress.commandsRun++;
         }
+        this.updateSpinner();
       }
     },
   });
