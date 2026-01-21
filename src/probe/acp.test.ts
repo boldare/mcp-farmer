@@ -63,8 +63,6 @@ describe("ProbeClient progress", () => {
     );
 
     const message = spinner.getLastMessage();
-    expect(message).toContain("1/1 tools");
-    expect(message).toContain("1 calls");
-
+    expect(message).toMatchInlineSnapshot(`"Analyzing (1/1 tools, 1 calls)"`)
   });
 });
