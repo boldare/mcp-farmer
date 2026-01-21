@@ -18,7 +18,7 @@ export type CodingAgent =
   | "gemini-cli"
   | "github-copilot-cli";
 
-export const AGENT_LABELS: Record<CodingAgent, string> = {
+const AGENT_LABELS: Record<CodingAgent, string> = {
   opencode: "OpenCode",
   "claude-code": "Claude Code",
   "gemini-cli": "Gemini CLI",

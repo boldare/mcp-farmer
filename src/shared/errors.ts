@@ -1,19 +1,12 @@
 export type ExitCode = 0 | 1 | 2;
 
-export class CliError extends Error {
+class CliError extends Error {
   readonly exitCode: ExitCode;
 
   constructor(message: string, exitCode: ExitCode) {
     super(message);
     this.name = "CliError";
     this.exitCode = exitCode;
-  }
-}
-
-export class UsageError extends CliError {
-  constructor(message: string) {
-    super(message, 2);
-    this.name = "UsageError";
   }
 }
 
