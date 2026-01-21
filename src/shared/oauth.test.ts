@@ -31,7 +31,9 @@ describe("CliOAuthProvider", () => {
 
     const promise = provider.waitForAuthorizationCode();
     // Prevent unhandled rejection before the assertion can attach
-    promise.catch(() => { /* empty */ });
+    promise.catch(() => {
+      /* empty */
+    });
     await delay(25);
 
     await fetch(`http://127.0.0.1:${port}/callback?code=test-code&state=wrong`);

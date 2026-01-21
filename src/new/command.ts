@@ -8,7 +8,6 @@ import { fileExists } from "../shared/config.js";
 import {
   input,
   select,
-  checkbox,
   confirm,
   spinner,
   intro,
@@ -43,7 +42,7 @@ Options:
   --http-framework <type>  HTTP framework: native or hono (default: native, remote only)
   --package-manager <pm>   Package manager: npm, pnpm, yarn, deno, or bun
   --no-git                 Skip git initialization
-  --deploy <option>        Deployment option: docker (remote server only)
+  --deploy <option>        Deployment option: docker, netlify (remote server only)
   --help                   Show this help message
 
 Server Types:
@@ -157,7 +156,7 @@ async function copyPackageJson(
 const validPackageManagers = ["npm", "pnpm", "yarn", "deno", "bun"] as const;
 const validServerTypes = ["local", "remote"] as const;
 const validHttpFrameworks = ["native", "hono"] as const;
-const validDeployOptions = ["docker"] as const;
+const validDeployOptions = ["docker", "netlify"] as const;
 
 type ServerType = (typeof validServerTypes)[number];
 
@@ -262,7 +261,7 @@ export async function newCommand(args: string[]) {
   let httpFramework: string | undefined;
   let packageManager: PackageManager;
   let initGit: boolean;
-  let releaseOptions: string[];
+  let deployOption: string | undefined;
 
   try {
     // Name prompt
@@ -366,16 +365,21 @@ export async function newCommand(args: string[]) {
       });
     }
 
-    // Release options prompt (only for remote servers)
+    // Deployment option prompt (only for remote servers)
     if (serverType === "local") {
-      releaseOptions = [];
+      deployOption = undefined;
     } else if (values.deploy) {
-      releaseOptions = [values.deploy];
+      deployOption = values.deploy;
     } else {
-      releaseOptions = await checkbox({
-        message: "Release options (optional):",
-        choices: [{ value: "docker", name: "Dockerfile" }],
+      const selected = await select({
+        message: "Deployment option:",
+        choices: [
+          { value: "none", name: "None (skip)" },
+          { value: "docker", name: "Docker" },
+          { value: "netlify", name: "Netlify Functions" },
+        ],
       });
+      deployOption = selected === "none" ? undefined : selected;
     }
   } catch (error) {
     handleCancel(error);
@@ -414,19 +418,27 @@ export async function newCommand(args: string[]) {
 
     const scripts = buildPackageJsonScripts(packageManager, transports);
 
-    const extraDependencies: Record<string, string> = useHono
-      ? {
-          hono: "^4.11.1",
-          "@hono/node-server": "^1.19.7",
-          "fetch-to-node": "^2.1.0",
-        }
-      : {};
+    const useNetlify = deployOption === "netlify";
+
+    const extraDependencies: Record<string, string> = {};
+    if (useHono) {
+      extraDependencies["hono"] = "^4.11.1";
+      extraDependencies["@hono/node-server"] = "^1.19.7";
+      extraDependencies["fetch-to-node"] = "^2.1.0";
+    }
+    if (useNetlify) {
+      extraDependencies["fetch-to-node"] = "^2.1.0";
+      extraDependencies["@netlify/functions"] = "^3.0.0";
+    }
 
     const extraDevDependencies: Record<string, string> = {};
     if (packageManager === "bun") {
       extraDevDependencies["@types/bun"] = "^1.3.4";
     } else if (packageManager !== "deno") {
       extraDevDependencies["tsx"] = "^4.19.4";
+    }
+    if (useNetlify) {
+      extraDevDependencies["netlify-cli"] = "^23.13.5";
     }
 
     const readmeReplacements: Record<string, string> = {
@@ -443,11 +455,17 @@ export async function newCommand(args: string[]) {
       stdioFileDoc: transports.includes("stdio")
         ? "  - `stdio.ts` - stdio transport entry point\n"
         : "",
-      dockerFileDoc: releaseOptions.includes("docker")
-        ? "- `Dockerfile` - Docker container configuration\n"
-        : "",
-      dockerSection: releaseOptions.includes("docker")
-        ? `## Docker
+      dockerFileDoc:
+        deployOption === "docker"
+          ? "- `Dockerfile` - Docker container configuration\n"
+          : "",
+      netlifyFileDoc:
+        deployOption === "netlify"
+          ? "- `netlify/functions/mcp.ts` - Netlify Functions handler\n"
+          : "",
+      dockerSection:
+        deployOption === "docker"
+          ? `## Docker
 
 \`\`\`bash
 # Build Docker image
@@ -458,7 +476,22 @@ docker run -p 3000:3000 ${name}
 \`\`\`
 
 `
-        : "",
+          : "",
+      netlifySection:
+        deployOption === "netlify"
+          ? `## Netlify
+
+Deploy to Netlify Functions:
+
+\`\`\`bash
+# Deploy (netlify-cli is included in devDependencies)
+npx netlify deploy
+\`\`\`
+
+Your MCP server will be available at \`https://your-site.netlify.app/mcp\`
+
+`
+          : "",
     };
 
     const filesToCopy: Promise<void>[] = [
@@ -489,10 +522,21 @@ docker run -p 3000:3000 ${name}
       filesToCopy.push(copyTemplate(httpTemplate, join(srcDir, "http.ts")));
     }
 
-    if (releaseOptions.includes("docker")) {
+    if (deployOption === "docker") {
       filesToCopy.push(
         copyTemplate("Dockerfile", join(targetDir, "Dockerfile")),
         copyTemplate("dockerignore", join(targetDir, ".dockerignore")),
+      );
+    }
+
+    if (deployOption === "netlify") {
+      const netlifyFunctionsDir = join(targetDir, "netlify", "functions");
+      await mkdir(netlifyFunctionsDir, { recursive: true });
+      filesToCopy.push(
+        copyTemplate(
+          "netlify/functions/mcp.ts",
+          join(netlifyFunctionsDir, "mcp.ts"),
+        ),
       );
     }
 

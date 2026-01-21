@@ -28,9 +28,9 @@ Vet your server with mcp-farmer:
 
 - `src/` - Source code directory
   - `server.ts` - MCP server definition with tools
-    {{httpFileDoc}}{{stdioFileDoc}}{{dockerFileDoc}}
+    {{httpFileDoc}}{{stdioFileDoc}}{{dockerFileDoc}}{{netlifyFileDoc}}
 
-{{dockerSection}}## Learn More
+{{dockerSection}}{{netlifySection}}## Learn More
 
 - [MCP Documentation](https://modelcontextprotocol.io)
 - [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
