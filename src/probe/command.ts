@@ -209,6 +209,7 @@ async function runProbe(
     workSpinner.start(`Probing ${tools.length} ${toolWord}...`);
 
     client.setSpinner(workSpinner);
+    client.setTotalTools(tools.length);
 
     const promptText = buildPrompt(tools, serverName, reportPath);
 

@@ -6,10 +6,15 @@ import {
 import { type SpinnerInstance } from "../shared/prompts.js";
 
 interface ProbeProgress {
-  toolsCalled: number;
-  toolsPassed: number;
-  toolsFailed: number;
+  totalTools: number;
+  uniqueToolsTested: Set<string>;
+  callsPerTool: Map<string, number>;
+  toolCallsById: Map<string, { toolName: string; callNumber: number }>;
+  totalCalls: number;
+  totalPassed: number;
+  totalFailed: number;
   currentToolName: string | null;
+  currentCallNumber: number;
   currentAction: string;
   phase: "analyzing" | "testing" | "reporting";
 }
@@ -53,11 +58,18 @@ function extractToolName(title: string | null | undefined): string | null {
   return title;
 }
 
+interface ActionResult {
+  action: string;
+  phase: ProbeProgress["phase"];
+  clearToolName: boolean;
+}
+
 function getActionMessage(
   kind: acp.ToolKind | null | undefined,
   title: string | null | undefined,
   toolName: string | null,
-): { action: string; phase: ProbeProgress["phase"]; clearToolName: boolean } {
+  callNumber: number,
+): ActionResult {
   const kindStr = kind?.toString() || "other";
   const titleLower = title?.toLowerCase() || "";
 
@@ -76,7 +88,16 @@ function getActionMessage(
 
   // Check for MCP tool calls
   if (titleLower.includes("mcp") || kindStr === "mcp") {
-    const displayName = toolName ? `Testing: ${toolName}` : "Calling MCP tool";
+    let displayName: string;
+    if (toolName) {
+      // Show call number if more than 1 call for this tool
+      displayName =
+        callNumber > 1
+          ? `Testing: ${toolName} (call ${callNumber})`
+          : `Testing: ${toolName}`;
+    } else {
+      displayName = "Calling MCP tool";
+    }
     return { action: displayName, phase: "testing", clearToolName: false };
   }
 
@@ -86,17 +107,29 @@ function getActionMessage(
 function formatProgressMessage(progress: ProbeProgress): string {
   const parts: string[] = [progress.currentAction];
 
-  if (progress.toolsCalled > 0) {
+  // Show tool progress when we have total tools count
+  if (progress.totalTools > 0) {
+    const testedCount = progress.uniqueToolsTested.size;
     const stats: string[] = [];
-    stats.push(`${progress.toolsCalled} tested`);
 
-    if (progress.toolsPassed > 0 || progress.toolsFailed > 0) {
-      if (progress.toolsFailed > 0) {
-        stats.push(`${progress.toolsFailed} failed`);
-      }
+    // Tool progress: "2/5 tools"
+    if (testedCount > 0 || progress.totalCalls > 0) {
+      stats.push(`${testedCount}/${progress.totalTools} tools`);
     }
 
-    parts.push(`(${stats.join(", ")})`);
+    // Total calls made
+    if (progress.totalCalls > 0) {
+      stats.push(`${progress.totalCalls} calls`);
+    }
+
+    // Failures if any
+    if (progress.totalFailed > 0) {
+      stats.push(`${progress.totalFailed} failed`);
+    }
+
+    if (stats.length > 0) {
+      parts.push(`(${stats.join(", ")})`);
+    }
   }
 
   return parts.join(" ");
@@ -105,16 +138,25 @@ function formatProgressMessage(progress: ProbeProgress): string {
 export class ProbeClient implements acp.Client {
   private spinner: SpinnerInstance | null = null;
   private progress: ProbeProgress = {
-    toolsCalled: 0,
-    toolsPassed: 0,
-    toolsFailed: 0,
+    totalTools: 0,
+    uniqueToolsTested: new Set<string>(),
+    callsPerTool: new Map<string, number>(),
+    toolCallsById: new Map<string, { toolName: string; callNumber: number }>(),
+    totalCalls: 0,
+    totalPassed: 0,
+    totalFailed: 0,
     currentToolName: null,
+    currentCallNumber: 0,
     currentAction: "Preparing probe",
     phase: "analyzing",
   };
 
   setSpinner(spinner: SpinnerInstance): void {
     this.spinner = spinner;
+  }
+
+  setTotalTools(count: number): void {
+    this.progress.totalTools = count;
   }
 
   stopSpinner(message: string): void {
@@ -142,18 +184,34 @@ export class ProbeClient implements acp.Client {
   sessionUpdate = createSessionUpdateHandler({
     onToolCall: (update) => {
       const toolName = extractToolName(update.title);
+      const kindStr = update.kind?.toString() || "other";
       if (toolName) {
         this.progress.currentToolName = toolName;
+
+        // Track calls per tool for showing "call N"
+        const currentCount = this.progress.callsPerTool.get(toolName) || 0;
+        const newCount = currentCount + 1;
+        this.progress.callsPerTool.set(toolName, newCount);
+        this.progress.currentCallNumber = newCount;
+
+        if (kindStr === "mcp" || update.title?.toLowerCase().includes("mcp")) {
+          this.progress.toolCallsById.set(update.toolCallId, {
+            toolName,
+            callNumber: newCount,
+          });
+        }
       }
 
       const { action, phase, clearToolName } = getActionMessage(
         update.kind,
         update.title,
         this.progress.currentToolName,
+        this.progress.currentCallNumber,
       );
 
       if (clearToolName) {
         this.progress.currentToolName = null;
+        this.progress.currentCallNumber = 0;
       }
 
       this.progress.currentAction = action;
@@ -162,16 +220,28 @@ export class ProbeClient implements acp.Client {
     },
     onToolCallUpdate: (update) => {
       const kindStr = update.kind?.toString() || "other";
+      const trackedCall = this.progress.toolCallsById.get(update.toolCallId);
+      const toolName = trackedCall?.toolName ?? extractToolName(update.title);
 
       if (update.status === "completed" || update.status === "failed") {
         if (kindStr === "mcp") {
-          this.progress.toolsCalled++;
+          this.progress.totalCalls++;
+
+          // Track unique tools that have been tested
+          if (toolName) {
+            this.progress.uniqueToolsTested.add(toolName);
+          }
+
           if (update.status === "completed") {
-            this.progress.toolsPassed++;
+            this.progress.totalPassed++;
           } else {
-            this.progress.toolsFailed++;
+            this.progress.totalFailed++;
           }
           this.updateSpinner();
+        }
+
+        if (trackedCall) {
+          this.progress.toolCallsById.delete(update.toolCallId);
         }
       }
     },
