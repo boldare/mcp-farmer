@@ -236,6 +236,8 @@ export function matchesTerm(item: TryItem, term: string | undefined): boolean {
   );
 }
 
+const HINT_INLINE_MAX_LENGTH = 60;
+
 async function tryTool(client: Client, tool: Tool): Promise<void> {
   const { properties, required, propNames } = extractToolSchema(tool);
   const args: Record<string, unknown> = {};
@@ -245,13 +247,21 @@ async function tryTool(client: Client, tool: Tool): Promise<void> {
     if (!prop) continue;
     const isRequired = required.has(propName);
     const type = getPropertyType(prop);
-    const hint = prop.description ?? "";
+    const description = prop.description ?? "";
     const requiredLabel = isRequired ? " (required)" : " (optional)";
     const formattedType = formatType(prop);
     const typeLabel = formattedType !== "string" ? ` [${formattedType}]` : "";
 
+    // For long descriptions, print above the prompt; for short ones, inline
+    const isLongDescription = description.length > HINT_INLINE_MAX_LENGTH;
+    if (isLongDescription && description) {
+      console.log(chalk.dim(`  ${description}`));
+    }
+    const inlineHint =
+      !isLongDescription && description ? ` - ${description}` : "";
+
     const value = await input({
-      message: `${propName}${requiredLabel}${typeLabel}${hint ? ` - ${hint}` : ""}`,
+      message: `${propName}${requiredLabel}${typeLabel}${inlineHint}`,
       validate: (val) => validateInputValue(val, type, propName, isRequired),
     });
 
@@ -331,9 +341,18 @@ async function tryPrompt(
 
   for (const arg of promptArgs) {
     const requiredLabel = arg.required ? " (required)" : " (optional)";
-    const hint = arg.description ?? "";
+    const description = arg.description ?? "";
+
+    // For long descriptions, print above the prompt; for short ones, inline
+    const isLongDescription = description.length > HINT_INLINE_MAX_LENGTH;
+    if (isLongDescription && description) {
+      console.log(chalk.dim(`  ${description}`));
+    }
+    const inlineHint =
+      !isLongDescription && description ? ` - ${description}` : "";
+
     const value = await input({
-      message: `${arg.name}${requiredLabel}${hint ? ` - ${hint}` : ""}`,
+      message: `${arg.name}${requiredLabel}${inlineHint}`,
       validate: arg.required
         ? (val) => {
             if (!val || val.trim() === "") {
