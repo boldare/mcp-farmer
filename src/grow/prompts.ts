@@ -44,7 +44,8 @@ Errors:
 
 ## Zod Schema Requirements
 
-1. Use \`.strict()\` on all object schemas to reject unknown properties
+### Input Schemas
+1. Use \`.strict()\` on input schemas to reject unknown properties
 2. Every property MUST have \`.describe()\` with a clear, concise description
 3. Add validation constraints: \`.min()\`, \`.max()\`, \`.email()\`, etc.
 4. Use \`.default()\` for optional parameters with sensible defaults
@@ -63,6 +64,24 @@ const InputSchema = z.object({
     .default(20)
     .describe("Maximum results to return"),
 }).strict();
+\`\`\`
+
+### Output Schemas
+1. Use \`.passthrough()\` on output schemas to allow additional properties from API responses
+2. APIs often return undocumented fields; \`.passthrough()\` prevents validation errors
+3. The schema documents the important/expected fields without rejecting extras
+4. For nested objects in arrays, also use \`.passthrough()\`
+
+Example:
+\`\`\`typescript
+const OutputSchema = z.object({
+  id: z.string().describe("Unique identifier"),
+  name: z.string().describe("Display name"),
+  items: z.array(z.object({
+    id: z.string(),
+    value: z.number()
+  }).passthrough())
+}).passthrough();
 \`\`\`
 
 ## Tool Annotations
@@ -92,14 +111,14 @@ return {
 
 ## Output Schema
 
-Define \`outputSchema\` to enable strict validation of structured results.
-When provided, the \`structuredContent\` MUST conform to this schema.
+Define \`outputSchema\` to document the structure of returned data.
+Use \`.passthrough()\` to allow additional properties from API responses.
 
 Benefits:
-- Enables clients to validate responses
+- Documents expected fields for clients
 - Provides type information for better integration
 - Guides LLMs to properly parse returned data
-- Improves documentation and developer experience
+- Tolerates undocumented API fields without breaking
 
 Example:
 \`\`\`typescript
@@ -115,14 +134,14 @@ server.registerTool(
       temperature: z.number().describe("Temperature in celsius"),
       conditions: z.string().describe("Weather conditions"),
       humidity: z.number().describe("Humidity percentage")
-    }),
+    }).passthrough(),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true }
   },
   async ({ location }) => {
     const data = await fetchWeather(location);
     return {
       content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
-      structuredContent: data  // Must match outputSchema
+      structuredContent: data
     };
   }
 );
@@ -231,7 +250,7 @@ Errors:
       name: z.string().describe("User's full name"),
       email: z.string().describe("User's email address"),
       created_at: z.string().describe("ISO 8601 timestamp of account creation")
-    }),
+    }).passthrough(),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -336,9 +355,9 @@ Errors:
         id: z.string().describe("User ID"),
         name: z.string().describe("User's name"),
         email: z.string().describe("User's email")
-      })).describe("List of users"),
+      }).passthrough()).describe("List of users"),
       count: z.number().describe("Number of users returned")
-    }),
+    }).passthrough(),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -483,7 +502,7 @@ Errors:
       content: z.string().describe("File content"),
       path: z.string().describe("File path"),
       size: z.number().describe("File size in bytes")
-    }),
+    }).passthrough(),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
