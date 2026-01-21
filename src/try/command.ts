@@ -97,7 +97,57 @@ Examples:
     mcp-farmer try -- npx -y @modelcontextprotocol/server-memory`);
 }
 
-function parseInputValue(value: string, type: string): unknown {
+export function validateInputValue(
+  value: string,
+  type: string,
+  propName: string,
+  required: boolean,
+): true | string {
+  if (!value || value.trim() === "") {
+    return required ? `${propName} is required` : true;
+  }
+
+  switch (type) {
+    case "number": {
+      const num = Number(value);
+      return Number.isNaN(num) ? `${propName} must be a number` : true;
+    }
+    case "integer": {
+      const num = Number(value);
+      return Number.isInteger(num) ? true : `${propName} must be an integer`;
+    }
+    case "boolean": {
+      const lowered = value.toLowerCase();
+      return lowered === "true" || lowered === "false"
+        ? true
+        : `${propName} must be true or false`;
+    }
+    case "object": {
+      try {
+        const parsed = JSON.parse(value);
+        return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+          ? true
+          : `${propName} must be a JSON object`;
+      } catch {
+        return `${propName} must be valid JSON`;
+      }
+    }
+    case "array": {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed)
+          ? true
+          : `${propName} must be a JSON array`;
+      } catch {
+        return `${propName} must be valid JSON`;
+      }
+    }
+    default:
+      return true;
+  }
+}
+
+export function parseInputValue(value: string, type: string): unknown {
   if (value === "") {
     return undefined;
   }
@@ -110,11 +160,7 @@ function parseInputValue(value: string, type: string): unknown {
       return value.toLowerCase() === "true";
     case "object":
     case "array":
-      try {
-        return JSON.parse(value);
-      } catch {
-        return value;
-      }
+      return JSON.parse(value);
     default:
       return value;
   }
@@ -204,14 +250,7 @@ async function tryTool(client: Client, tool: Tool): Promise<void> {
 
     const value = await input({
       message: `${propName}${requiredLabel}${typeLabel}${hint ? ` - ${hint}` : ""}`,
-      validate: isRequired
-        ? (val) => {
-            if (!val || val.trim() === "") {
-              return `${propName} is required`;
-            }
-            return true;
-          }
-        : undefined,
+      validate: (val) => validateInputValue(val, type, propName, isRequired),
     });
 
     const parsed = parseInputValue(value, type);
