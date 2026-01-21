@@ -125,7 +125,9 @@ export function validateInputValue(
     case "object": {
       try {
         const parsed = JSON.parse(value);
-        return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        return typeof parsed === "object" &&
+          parsed !== null &&
+          !Array.isArray(parsed)
           ? true
           : `${propName} must be a JSON object`;
       } catch {

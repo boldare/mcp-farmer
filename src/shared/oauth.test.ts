@@ -32,9 +32,7 @@ describe("CliOAuthProvider", () => {
     const promise = provider.waitForAuthorizationCode();
     await delay(25);
 
-    await fetch(
-      `http://127.0.0.1:${port}/callback?code=test-code&state=wrong`,
-    );
+    await fetch(`http://127.0.0.1:${port}/callback?code=test-code&state=wrong`);
 
     await expect(promise).rejects.toThrow("Invalid OAuth state");
   });
