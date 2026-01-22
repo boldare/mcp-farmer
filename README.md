@@ -92,6 +92,8 @@ mcp-farmer try -- npx -y @modelcontextprotocol/server-memory
 mcp-farmer new
 ```
 
+![new-demo](demo/new.gif)
+
 Interactively creates a TypeScript MCP server with HTTP/stdio transports, your choice of framework (Node.js HTTP or Hono), and package manager.
 
 ### `market` — Install popular MCP servers
@@ -148,6 +150,8 @@ mcp-farmer probe -- npx -y @modelcontextprotocol/server-memory  # Stdio
 Connects to an MCP server, lets you select tools to probe, then uses an AI coding agent (OpenCode, Claude Code, or Gemini CLI) to generate test inputs, call each tool, and produce a markdown probe report.
 
 ### `vet` — Audit MCP server quality
+
+![vet-demo](demo/vet.gif)
 
 ```bash
 mcp-farmer vet http://localhost:3000/mcp              # HTTP
