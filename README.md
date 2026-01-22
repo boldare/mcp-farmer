@@ -140,6 +140,10 @@ Parses your API specification, lets you select endpoints/operations and response
 
 ### `probe` — Test MCP tools with AI
 
+![probe-demo](demo/probe.gif)
+
+See an example probe [output markdown file](./demo/mcp-probe-context7-2026-01-22T11-59-06-376Z.md)
+
 ```bash
 mcp-farmer probe http://localhost:3000/mcp              # HTTP
 mcp-farmer probe                                        # Auto-detect from config
