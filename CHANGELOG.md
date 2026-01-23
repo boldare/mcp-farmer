@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/boldare/mcp-farmer/compare/v1.3.0...v1.3.1) (2026-01-23)
+
+
+### Bug Fixes
+
+* add workflow_dispatch to release workflow for manual npm publish ([0a23705](https://github.com/boldare/mcp-farmer/commit/0a2370533c42d2c3d4f9d3816c7cb27164566f87))
+* improve handling of long input description in try command ([1ea118c](https://github.com/boldare/mcp-farmer/commit/1ea118c9f298dcc154bad58452b0e6c5a15fe396))
+
 ## [1.3.0](https://github.com/boldare/mcp-farmer/compare/v1.2.0...v1.3.0) (2026-01-21)
 
 
