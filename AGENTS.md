@@ -7,19 +7,19 @@ CLI tool for managing and analyzing MCP (Model Context Protocol) servers.
 - **Package manager:** bun
 - **Entry point:** `cli.ts`
 
-| Command | Purpose |
-|---------|---------|
+| Command              | Purpose                  |
+| -------------------- | ------------------------ |
 | `bun run type-check` | TypeScript type checking |
-| `bun run lint` | ESLint |
-| `bun run test` | Run tests |
+| `bun run lint`       | ESLint                   |
+| `bun run test`       | Run tests                |
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success/pass |
-| 1 | Findings/fail |
-| 2 | Invalid usage/error |
+| Code | Meaning             |
+| ---- | ------------------- |
+| 0    | Success/pass        |
+| 1    | Findings/fail       |
+| 2    | Invalid usage/error |
 
 ## Code Style
 
@@ -48,6 +48,7 @@ Add a comment when the reader would otherwise have to reverse-engineer intent, t
 ### Abstraction
 
 Extract a helper only when it provides:
+
 - Reuse across multiple files
 - A type guard or assertion
 - A clear readability win in the calling code
@@ -63,6 +64,7 @@ Add a dependency only when it clearly reduces risk or complexity compared to wri
 ### Workflow
 
 Follow TDD (Red -> Green -> Refactor):
+
 1. Write a failing test that describes the next behavior
 2. Implement the smallest change to pass
 3. Refactor
@@ -96,7 +98,7 @@ Good: "Connection to localhost:3000 failed: ECONNREFUSED. Is the server running?
 ```
 
 **Error flow:**
+
 1. **Shared code** (`src/shared/**`): Throw typed errors with context. Never call `process.exit()`.
 2. **Command handlers** (`src/*/command.ts`): Catch errors, convert to user-friendly messages.
 3. **CLI boundary** (`cli.ts`): Map error types to exit codes.
-

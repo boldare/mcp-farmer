@@ -52,13 +52,14 @@ function getActionMessage(
 
 const STAT_ORDER: ActionType[] = ["write", "read", "list", "search", "command"];
 
-const STAT_FORMATTERS: Partial<Record<ActionType, (count: number) => string>> = {
-  write: (count) => `${count} ${pluralize("file", count)} created`,
-  read: (count) => `${count} ${pluralize("file", count)} analyzed`,
-  list: (count) => `${count} ${pluralize("path", count)} listed`,
-  search: (count) => `${count} ${pluralize("search", count)}`,
-  command: (count) => `${count} ${pluralize("command", count)}`,
-};
+const STAT_FORMATTERS: Partial<Record<ActionType, (count: number) => string>> =
+  {
+    write: (count) => `${count} ${pluralize("file", count)} created`,
+    read: (count) => `${count} ${pluralize("file", count)} analyzed`,
+    list: (count) => `${count} ${pluralize("path", count)} listed`,
+    search: (count) => `${count} ${pluralize("search", count)}`,
+    command: (count) => `${count} ${pluralize("command", count)}`,
+  };
 
 function formatProgressMessage(progress: AgentProgress): string {
   const stats = [];
