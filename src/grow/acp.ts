@@ -6,15 +6,12 @@ import {
   createSessionUpdateHandler,
 } from "../shared/acp.js";
 import { type SpinnerInstance } from "../shared/prompts.js";
+import { pluralize } from "../shared/text.js";
 
 type ActionType = "read" | "list" | "write" | "search" | "command" | "other";
 
 interface AgentProgress {
-  filesRead: number;
-  filesWritten: number;
-  pathsListed: number;
-  searches: number;
-  commandsRun: number;
+  counts: Record<ActionType, number>;
   currentAction: string;
   currentActionType: ActionType;
 }
@@ -53,36 +50,28 @@ function getActionMessage(
   return { action: "Working", type: "other" };
 }
 
+const STAT_ORDER: ActionType[] = ["write", "read", "list", "search", "command"];
+
+const STAT_FORMATTERS: Partial<Record<ActionType, (count: number) => string>> = {
+  write: (count) => `${count} ${pluralize("file", count)} created`,
+  read: (count) => `${count} ${pluralize("file", count)} analyzed`,
+  list: (count) => `${count} ${pluralize("path", count)} listed`,
+  search: (count) => `${count} ${pluralize("search", count)}`,
+  command: (count) => `${count} ${pluralize("command", count)}`,
+};
+
 function formatProgressMessage(progress: AgentProgress): string {
-  const parts: string[] = [progress.currentAction];
+  const stats = [];
 
-  const stats: string[] = [];
-
-  if (progress.filesWritten > 0) {
-    const fileWord = progress.filesWritten === 1 ? "file" : "files";
-    stats.push(`${progress.filesWritten} ${fileWord} created`);
+  for (const type of STAT_ORDER) {
+    const count = progress.counts[type];
+    const formatter = STAT_FORMATTERS[type];
+    if (count > 0 && formatter) {
+      stats.push(formatter(count));
+    }
   }
 
-  if (progress.filesRead > 0) {
-    const fileWord = progress.filesRead === 1 ? "file" : "files";
-    stats.push(`${progress.filesRead} ${fileWord} analyzed`);
-  }
-
-  if (progress.pathsListed > 0) {
-    const pathWord = progress.pathsListed === 1 ? "path" : "paths";
-    stats.push(`${progress.pathsListed} ${pathWord} listed`);
-  }
-
-  if (progress.searches > 0) {
-    const searchWord = progress.searches === 1 ? "search" : "searches";
-    stats.push(`${progress.searches} ${searchWord}`);
-  }
-
-  if (progress.commandsRun > 0) {
-    const commandWord = progress.commandsRun === 1 ? "command" : "commands";
-    stats.push(`${progress.commandsRun} ${commandWord}`);
-  }
-
+  const parts = [progress.currentAction];
   if (stats.length > 0) {
     parts.push(`(${stats.join(", ")})`);
   }
@@ -93,11 +82,14 @@ function formatProgressMessage(progress: AgentProgress): string {
 export class CodingClient implements acp.Client {
   private spinner: SpinnerInstance | null = null;
   private progress: AgentProgress = {
-    filesRead: 0,
-    filesWritten: 0,
-    pathsListed: 0,
-    searches: 0,
-    commandsRun: 0,
+    counts: {
+      read: 0,
+      list: 0,
+      write: 0,
+      search: 0,
+      command: 0,
+      other: 0,
+    },
     currentAction: "Preparing workspace",
     currentActionType: "other",
   };
@@ -142,16 +134,18 @@ export class CodingClient implements acp.Client {
 
       if (status === "completed") {
         if (type === "list") {
-          this.progress.pathsListed++;
+          this.progress.counts.list++;
         } else if (type === "read") {
-          this.progress.filesRead++;
+          this.progress.counts.read++;
         } else if (type === "write" || kindStr === "edit") {
-          this.progress.filesWritten++;
+          this.progress.counts.write++;
           this.progress.currentAction = "Writing code";
         } else if (type === "search") {
-          this.progress.searches++;
+          this.progress.counts.search++;
         } else if (type === "command") {
-          this.progress.commandsRun++;
+          this.progress.counts.command++;
+        } else {
+          this.progress.counts.other++;
         }
         this.updateSpinner();
       }
